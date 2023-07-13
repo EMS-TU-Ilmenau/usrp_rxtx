@@ -7,6 +7,7 @@
 #include <uhd/version.hpp>
 #include <uhd/usrp/multi_usrp.hpp>
 
+#include "config.hpp"
 #include "error.hpp"
 
 // warn about unsupported UHD versions
@@ -16,8 +17,12 @@
 
 int main(int argc, char *argv[])
 try {
-    (void) argc;
-    (void) argv;
+    // read config file
+    if (argc != 2) {
+        std::cerr << "usage: " << argv[0] << " config.cfg" << std::endl;
+        return 1;
+    }
+    const Config cfg{argv[1]};
 
     // block signals that will be handled via sigtimedwait() in main loop
     sigset_t set;

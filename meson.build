@@ -14,12 +14,14 @@ dep_uhd = dependency('uhd')
 dep_thread = dependency('threads')
 
 usrp_rxtx = executable('usrp_rxtx', 'src/main.cpp', gen_version,
+                       'src/config.cpp',
                         dependencies : [dep_rt, dep_thread, dep_uhd])
 
 
 # define unit tests
 tests = [
-    ['test_dummy', 'test/test_dummy.cpp', []],
+    ['test_config', ['test/test_config.cpp', 'src/config.cpp'], [join_paths(meson.current_source_dir(), 'src/config.cfg')]],
+    ['test_json', 'test/test_json.cpp', []],
 ]
 
 # run all unit tests
