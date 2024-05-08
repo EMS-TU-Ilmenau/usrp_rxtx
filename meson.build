@@ -13,9 +13,17 @@ dep_rt = meson.get_compiler('cpp').find_library('rt')
 dep_uhd = dependency('uhd')
 dep_thread = dependency('threads')
 
+# import mosquitto cmake subproject to build and link against libmosquitto
+cmake = import('cmake')
+mqtt_opts = cmake.subproject_options()
+mqtt_opts.set_override_option('warning_level', '0')
+mqtt_opts.add_cmake_defines({'WITH_PIC': true, 'WITH_STATIC_LIBRARIES': true})
+mqtt = cmake.subproject('mosquitto', options: mqtt_opts)
+dep_mqtt = mqtt.dependency('libmosquitto_static')
+
 usrp_rxtx = executable('usrp_rxtx', 'src/main.cpp', gen_version,
-                       'src/config.cpp',
-                        dependencies : [dep_rt, dep_thread, dep_uhd])
+                       'src/config.cpp', 'src/mqtt.cpp',
+                        dependencies : [dep_mqtt, dep_rt, dep_thread, dep_uhd])
 
 
 # define unit tests

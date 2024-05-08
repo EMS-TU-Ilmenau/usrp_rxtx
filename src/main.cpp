@@ -9,6 +9,7 @@
 
 #include "config.hpp"
 #include "error.hpp"
+#include "mqtt.hpp"
 
 // warn about unsupported UHD versions
 #if UHD_VERSION < 4030000
@@ -31,8 +32,11 @@ try {
     sigaddset(&set, SIGINT);
     sigaddset(&set, SIGTERM);
     int ret = pthread_sigmask(SIG_BLOCK, &set, nullptr);
-    if (ret == -1)
+    if (ret != 0)
         throw syscall_error{"pthread_sigmask() failed", ret};
+
+    // spawn MQTT client
+    Mqtt::sptr mqtt = Mqtt::make();
 
     // run until interrupted
     int n = 0;

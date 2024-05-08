@@ -1,0 +1,3 @@
+[submodule "subprojects/mosquitto"]
+	path = subprojects/mosquitto
+	url = https://github.com/eclipse/mosquitto.git
