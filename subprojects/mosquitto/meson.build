@@ -7,10 +7,11 @@ project('mosquitto', ['c', 'cpp'],
 # configure features (see mosquitto/CMakeLists.txt and mosquitto/lib/CMakeLists.txt)
 add_project_arguments('-DWITH_TLS', '-DWITH_THREADING', language: ['c', 'cpp'])
 
-# suppress "‘ENGINE_*’ is deprecated: Since OpenSSL 3.0" warnings
-if meson.get_compiler('c').get_argument_syntax() == 'gcc'
-	add_project_arguments('-Wno-deprecated-declarations', language: ['c', 'cpp'])
-endif
+# mosquitto as of v2.0.18 uses the OpenSSL 1.1 ENGINE API, which is deprecated
+# as of OpenSSL 3.0. define the OPENSSL_API_COMPAT version compatibility macro:
+# https://www.openssl.org/docs/manmaster/man7/OPENSSL_API_COMPAT.html
+# upstream pull request: https://github.com/eclipse/mosquitto/pull/3050
+add_project_arguments('-DOPENSSL_API_COMPAT=0x10100000L', language: 'c')
 
 # find external dependencies
 dep_thread = dependency('threads')
