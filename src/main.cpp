@@ -9,6 +9,7 @@
 
 #include "config.hpp"
 #include "error.hpp"
+#include "logging.hpp"
 #include "mqtt.hpp"
 
 // warn about unsupported UHD versions
@@ -35,6 +36,9 @@ try {
     if (ret != 0)
         throw syscall_error{"pthread_sigmask() failed", ret};
 
+    // spawn Logging
+    Logging::sptr logging = Logging::make("usrp_rxtx");
+
     // spawn MQTT client
     Mqtt::sptr mqtt = Mqtt::make();
 
@@ -51,7 +55,8 @@ try {
             break;
         }
 
-        std::cerr << "Main loop iteration: " << n++ << std::endl;
+        std::string mesg = "Main loop iteration: " + std::to_string(n++);
+        logging->log(std::move(mesg));
     }
 
     return 0;
