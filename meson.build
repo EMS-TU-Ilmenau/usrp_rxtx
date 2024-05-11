@@ -28,6 +28,7 @@ usrp_rxtx = executable('usrp_rxtx', 'src/main.cpp', gen_version,
 tests = [
     ['test_config', ['test/test_config.cpp', 'src/config.cpp'], [join_paths(meson.current_source_dir(), 'src/config.cfg')]],
     ['test_json', 'test/test_json.cpp', []],
+    ['test_mpsc', 'test/test_mpsc.cpp', []]
 ]
 
 # run all unit tests
