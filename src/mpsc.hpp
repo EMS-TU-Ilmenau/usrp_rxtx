@@ -9,26 +9,29 @@
     #include "../test/test.hpp"
 #endif
 
-template <typename T, std::size_t capacity, std::size_t alignment = 64>
+template <typename T, std::size_t N, std::size_t A = 64>
 class mpsc {
-    // capacity must be power of two
-    static_assert((capacity & (capacity - 1)) == 0,
-                  "requested capacity is not a power of two");
+    // N must be power of two
+    static_assert((N & (N - 1)) == 0,
+                  "requested N is not a power of two");
 
 public:
-    auto push(T&& obj) -> bool
+    constexpr auto size() -> std::size_t
+        { return N; }
+
+    auto push(T&& obj) -> std::size_t
     {
         // try to allocate slot
         std::size_t _used = used.fetch_add(1, std::memory_order_acquire);
-        if (_used >= capacity) {
+        if (_used >= N) {
             used.fetch_sub(1, std::memory_order_release);
             lost.fetch_add(1, std::memory_order_relaxed);
-            return false;
+            return N;
         }
 
         // allocation succeeded, so increment head
         std::size_t _head = head.fetch_add(1, std::memory_order_acquire)
-                          & (capacity - 1);
+                          & (N - 1);
 
         // move data into slot and validate it
         ring[_head].data = std::move(obj);
@@ -40,7 +43,7 @@ public:
         ring[_head].valid.store(true, std::memory_order_release);
 #endif
 
-        return true;
+        return _used;
     }
 
     auto pop() -> std::optional<T>
@@ -56,7 +59,7 @@ public:
             return std::nullopt;
 
         // verify data is valid
-        std::size_t _tail = tail & (capacity - 1);
+        std::size_t _tail = tail & (N - 1);
         if (!ring[_tail].valid.load(std::memory_order_acquire))
             return std::nullopt;
 
@@ -74,20 +77,20 @@ public:
 
 private:
     // place shared members on alignment boundary (separate cache line)
-    alignas(alignment) std::atomic<std::size_t> used {0};
+    alignas(A) std::atomic<std::size_t> used {0};
 
     // place producer members alignment boundary (separate cache line)
-    alignas(alignment) std::atomic<std::size_t> head {0};
-                       std::atomic<std::size_t> lost {0};
+    alignas(A) std::atomic<std::size_t> head {0};
+               std::atomic<std::size_t> lost {0};
 
     // place consumer members on alignment boundary (separate cache line)
-    alignas(alignment) std::size_t tail {0};
+    alignas(A) std::size_t tail {0};
 
     // place ring on alignment boundary (separate cache line)
-    alignas(alignment) struct {
+    alignas(A) struct {
         std::atomic<bool> valid;
         T data;
-    } ring[capacity] {};
+    } ring[N] {};
 };
 
 #endif /* MPSCP_HPP */

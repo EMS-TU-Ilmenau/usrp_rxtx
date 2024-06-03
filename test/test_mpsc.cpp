@@ -30,7 +30,7 @@ void producer(uint64_t thread)
     uint64_t ctr = 0;
     while (ctr < NUM_ITERATIONS) {
         struct item s { thread, ctr };
-        if (queue.push(std::move(s)))
+        if (queue.push(std::move(s)) != queue.size())
             ctr++;
     }
 }

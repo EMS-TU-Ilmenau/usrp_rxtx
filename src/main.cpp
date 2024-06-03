@@ -37,7 +37,7 @@ try {
         throw syscall_error{"pthread_sigmask() failed", ret};
 
     // spawn Logging
-    Logging::sptr logging = Logging::make("usrp_rxtx");
+    Logger::sptr logger = Logger::make("usrp_rxtx");
 
     // spawn MQTT client
     Mqtt::sptr mqtt = Mqtt::make();
@@ -56,7 +56,7 @@ try {
         }
 
         std::string mesg = "Main loop iteration: " + std::to_string(n++);
-        logging->log(std::move(mesg));
+        logger->log(std::move(mesg));
     }
 
     return 0;
