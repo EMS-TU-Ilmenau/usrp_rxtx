@@ -36,8 +36,8 @@ try {
     if (ret != 0)
         throw syscall_error{"pthread_sigmask() failed", ret};
 
-    // spawn Logging
-    Logger::sptr logger = Logger::make("usrp_rxtx");
+    // spawn Logger
+    Logger::sptr logger = Logger::make("usrp_rxtx", std::move(cfg.to_json()));
 
     // spawn MQTT client
     Mqtt::sptr mqtt = Mqtt::make();

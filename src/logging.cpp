@@ -1,11 +1,34 @@
 #include "error.hpp"
+#include "json.hpp"
 #include "logging.hpp"
 #include "version.hpp"
 
-Logger::Logger(const std::filesystem::path& path_prefix)
+extern "C" {
+    #include <sys/utsname.h>
+    #include <unistd.h>
+}
+
+Logger::Logger(const std::filesystem::path& path_prefix, Json::Object&& config)
 {
+    // get hostname
+    char hostname[256];
+    if (gethostname(hostname, sizeof(hostname)) != 0)
+        throw syscall_error{"gethostbyname() failed"};
+
+    // get uname
+    struct utsname utsbuf;
+    std::ostringstream unamebuf;
+    if (uname(&utsbuf) != 0)
+        throw syscall_error{"uname() failed"};
+    unamebuf << utsbuf.sysname << ' '
+             << utsbuf.nodename << ' '
+             << utsbuf.release << ' '
+             << utsbuf.version << ' '
+             << utsbuf.machine;
+
+    // determine log file timestamp
     uint64_t epoch_sec = std::chrono::time_point_cast<std::chrono::seconds>(
-            std::chrono::system_clock::now()).time_since_epoch().count();
+        std::chrono::system_clock::now()).time_since_epoch().count();
 
     // open log file
     std::filesystem::path path = path_prefix;
@@ -13,6 +36,29 @@ Logger::Logger(const std::filesystem::path& path_prefix)
     log_file.open(path);
     if (!log_file)
         throw syscall_error{"error opening log file: " + path.generic_string()};
+
+    // log software origin and commit hash
+    Json::Object{{
+        { "_type", "software" },
+        { "git_origin", std::string{git_origin} },
+        { "git_hash", std::string{git_hash} }
+    }}.dump(&log_file);
+    log_file << '\n';
+
+    // log hostname and uname
+    Json::Object{{
+        { "_type", "host" },
+        { "hostname", std::string{hostname} },
+        { "uname", unamebuf.str() }
+    }}.dump(&log_file);
+    log_file << '\n';
+
+    // log contents of loaded configuration file
+    Json::Object{{
+        { "_type", "config" },
+        { "config", config }
+    }}.dump(&log_file);
+    log_file << '\n';
 
     // spawn and wait for worker
     worker_handle = std::thread{&Logger::worker, this};
@@ -55,20 +101,52 @@ void Logger::worker()
         //       deadlock if another thread keeps logging faster than we
         //       consume here.
         for (auto opt = queue.pop(); opt.has_value(); opt = queue.pop()) {
-            const auto [str_log, str_term] = std::visit([](auto& arg){ return arg.serialize(); }, opt.value());
-            if (str_term.has_value())
-                std::cout << str_term.value() << std::endl;
-            log_file << str_log << '\n';
+            // defer formatting to individual variant's .serialize() function
+            // TODO: pass std::ostringstream instead of std::cout to coalesce
+            //       terminal output
+            std::visit([this](auto& arg){ return arg.serialize(log_file, std::cout); }, opt.value());
         }
     }
 }
 
-auto Log::Base::serialize() -> std::tuple<std::string, std::optional<std::string>>
+/// @brief convert embedded timestamp to RFC3339-formatted string
+auto Log::Base::time_rfc3339() const -> std::string
 {
-    return {"", std::nullopt};
+    auto days = std::chrono::floor<std::chrono::days>(time_point);
+    std::chrono::year_month_day date{days};
+    std::chrono::hh_mm_ss time{
+        std::chrono::floor<std::chrono::nanoseconds>(time_point - days)
+    };
+
+    std::ostringstream rfc3339;
+    rfc3339 << std::setfill('0')
+            << std::setw(4) << static_cast<int>(date.year())       << '-'
+            << std::setw(2) << static_cast<unsigned>(date.month()) << '-'
+            << std::setw(2) << static_cast<unsigned>(date.day())   << 'T'
+            << std::setw(2) << time.hours().count()                << ':'
+            << std::setw(2) << time.minutes().count()              << ':'
+            << std::setw(2) << time.seconds().count()              << '.'
+            << std::setw(9) << time.subseconds().count()           << 'Z';
+
+    return rfc3339.str();
 }
 
-auto Log::Misc::serialize() -> std::tuple<std::string, std::optional<std::string>>
+/// @brief convert embedded timestamp to nanoseconds since POSIX epoch
+auto Log::Base::time_epoch_ns() const -> uint64_t
 {
-    return {msg, msg};
+    return std::chrono::time_point_cast<std::chrono::nanoseconds>(
+        time_point).time_since_epoch().count();
+}
+
+void Log::Misc::serialize(std::ostream& log_stream, std::ostream& term_stream) const
+{
+    term_stream << time_rfc3339() << ' ' << msg << std::endl;
+
+    Json::Object{{
+        { "_time", std::move(time_rfc3339()) },
+        { "_time_ns", (int64_t) time_epoch_ns() },
+        { "_type", Json::Null{} },
+        { "message", msg }
+    }}.dump(&log_stream);
+    log_stream << '\n';
 }

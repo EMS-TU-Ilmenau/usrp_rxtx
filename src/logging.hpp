@@ -23,7 +23,10 @@ namespace Log {
         Base(const std::source_location src_loc = std::source_location::current())
             : src_loc{src_loc}
         {};
-        auto serialize() -> std::tuple<std::string, std::optional<std::string>>;
+
+        auto time_rfc3339() const -> std::string;
+        auto time_epoch_ns() const -> uint64_t;
+        auto prio_str() const -> const std::string;
 
     protected:
         std::source_location src_loc;
@@ -39,7 +42,7 @@ namespace Log {
             : Base{src_loc}
             , msg{std::move(msg)}
         {};
-        auto serialize() -> std::tuple<std::string, std::optional<std::string>>;
+        void serialize(std::ostream& log_stream, std::ostream& term_stream) const;
 
     private:
         std::string msg;
@@ -50,8 +53,8 @@ class Logger {
 public:
     using sptr = std::shared_ptr<Logger>;
 
-    static auto make(const std::filesystem::path& path) -> sptr
-        { return sptr(new Logger(path)); }
+    static auto make(const std::filesystem::path& path, Json::Object&& config) -> sptr
+        { return sptr(new Logger(path, std::move(config))); }
     ~Logger();
 
     inline void log(std::string&& mesg)
@@ -71,7 +74,7 @@ public:
     }
 
 private:
-    Logger(const std::filesystem::path& path_prefix);
+    Logger(const std::filesystem::path& path_prefix, Json::Object&& config);
 
     std::atomic<bool> run {false};
     std::thread worker_handle;
