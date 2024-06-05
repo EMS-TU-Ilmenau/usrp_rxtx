@@ -37,7 +37,7 @@ void producer(uint64_t thread)
 
 // consumer worker that pops from queue and verifies that counter values are
 // consecutive
-void consumer(void)
+void consumer()
 {
     uint64_t ctr[2] = { 0, 0 };
 

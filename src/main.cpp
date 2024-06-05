@@ -37,10 +37,10 @@ try {
         throw syscall_error{"pthread_sigmask() failed", ret};
 
     // spawn Logger
-    Logger::sptr logger = Logger::make("usrp_rxtx", std::move(cfg.to_json()));
+    Logger::sptr logger = std::make_shared<Logger>("usrp_rxtx", std::move(cfg.to_json()));
 
     // spawn MQTT client
-    Mqtt::sptr mqtt = Mqtt::make();
+    Mqtt::sptr mqtt = std::make_shared<Mqtt>();
 
     // run until interrupted
     int n = 0;

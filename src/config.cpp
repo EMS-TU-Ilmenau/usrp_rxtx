@@ -133,7 +133,7 @@ void Config::parse(std::istream& istream)
     tx.gain = std::get<double>(map["tx"]["gain"]);
 }
 
-auto Config::to_json(void) const -> Json::Object
+auto Config::to_json() const -> Json::Object
 {
     Json::Object cfg;
 

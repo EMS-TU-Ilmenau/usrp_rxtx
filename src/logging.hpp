@@ -53,9 +53,12 @@ class Logger {
 public:
     using sptr = std::shared_ptr<Logger>;
 
-    static auto make(const std::filesystem::path& path, Json::Object&& config) -> sptr
-        { return sptr(new Logger(path, std::move(config))); }
+    Logger(const std::filesystem::path& path_prefix, Json::Object&& config);
     ~Logger();
+
+    // delete copy constructor and copy assignment operator
+    Logger(const Logger&) = delete;
+    Logger& operator=(const Logger&) = delete;
 
     inline void log(std::string&& mesg)
     {
@@ -74,8 +77,6 @@ public:
     }
 
 private:
-    Logger(const std::filesystem::path& path_prefix, Json::Object&& config);
-
     std::atomic<bool> run {false};
     std::thread worker_handle;
     mpsc<std::variant<Log::Misc>, 128> queue;

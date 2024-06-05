@@ -34,24 +34,26 @@ class Mqtt {
 public:
     using sptr = std::shared_ptr<Mqtt>;
 
-    static sptr make()
-        { return sptr(new Mqtt()); }
-    ~Mqtt(void);
+    Mqtt();
+    ~Mqtt();
 
-    void stop(void);
+    // delete copy constructor and copy assignment operator
+    Mqtt(const Mqtt&) = delete;
+    Mqtt& operator=(const Mqtt&) = delete;
 
-    inline bool is_running(void)
+    void stop();
+
+    inline bool is_running()
         { return run; }
-    std::string get_status(void);
+    std::string get_status();
 
 private:
-    Mqtt();
     volatile std::atomic<bool> run;
     std::thread worker_handle;
 
     struct mosquitto *mosq;
 
-    void worker(void);
+    void worker();
 };
 
 #endif /* MQTT_HPP */

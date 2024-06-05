@@ -24,10 +24,10 @@ Mqtt::Mqtt()
 
     // spawn worker
     run = true;
-    worker_handle = std::thread(&Mqtt::worker, this);
+    worker_handle = std::thread{&Mqtt::worker, this};
 }
 
-Mqtt::~Mqtt(void)
+Mqtt::~Mqtt()
 {
     stop();
     mosquitto_destroy(mosq);
@@ -35,13 +35,13 @@ Mqtt::~Mqtt(void)
     mosquitto_lib_cleanup();
 }
 
-void Mqtt::stop(void)
+void Mqtt::stop()
 {
     if (run.exchange(false))
         worker_handle.join();
 }
 
-void Mqtt::worker(void)
+void Mqtt::worker()
 {
 #ifdef _GNU_SOURCE
     pthread_setname_np(pthread_self(), "mqtt");
@@ -50,7 +50,7 @@ void Mqtt::worker(void)
     uint64_t next_heartbeat = 0;
 
     int rc;
-    while (run) {
+    while (run.load(std::memory_order_relaxed)) {
         // send periodic heartbeat
         uint64_t epoch_nsec = std::chrono::time_point_cast<std::chrono::nanoseconds>(
             std::chrono::system_clock::now()).time_since_epoch().count();
