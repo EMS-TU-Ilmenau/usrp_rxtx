@@ -22,9 +22,9 @@ public:
     } cpu;
     struct {
         std::string mount_desc;
-        std::string mount_data;
+        std::string mount_ring;
         std::size_t size_desc_mib;
-        std::size_t size_data_mib;
+        std::size_t size_ring_mib;
     } shmem;
     struct {
         std::string subdev;
@@ -54,9 +54,9 @@ private:
         }},
         { "shmem", {
             { "mount_desc", "/dev/hugepages" },
-            { "mount_data", "/dev/hugepages" },
+            { "mount_ring", "/dev/hugepages" },
             { "size_desc_mib", 2 },
-            { "size_data_mib", 1024 }
+            { "size_ring_mib", 1024 }
         }},
         { "rx", {
             { "subdev", "" },

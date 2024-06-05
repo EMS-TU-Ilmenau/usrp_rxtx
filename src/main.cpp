@@ -11,6 +11,7 @@
 #include "error.hpp"
 #include "logging.hpp"
 #include "mqtt.hpp"
+#include "ringbuf.hpp"
 
 // warn about unsupported UHD versions
 #if UHD_VERSION < 4030000
@@ -41,6 +42,11 @@ try {
 
     // spawn MQTT client
     Mqtt::sptr mqtt = std::make_shared<Mqtt>();
+
+    // allocate ringbuffer
+    // NOTE: allocate 2M hugepages via `echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages`
+    Ringbuf ring{cfg.shmem.mount_desc + "/usrp_rxtx_desc", cfg.shmem.size_desc_mib << 20,
+                 cfg.shmem.mount_ring + "/usrp_rxtx_ring", cfg.shmem.size_ring_mib << 20};
 
     // run until interrupted
     int n = 0;

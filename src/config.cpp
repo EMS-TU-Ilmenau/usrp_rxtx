@@ -124,9 +124,9 @@ void Config::parse(std::istream& istream)
     usrp.sample_rate = std::get<double>(map["usrp"]["sample_rate"]);
     cpu.max_latency_usec = (int32_t) std::get<int64_t>(map["cpu"]["max_latency_usec"]);
     shmem.mount_desc = std::get<std::string>(map["shmem"]["mount_desc"]);
-    shmem.mount_data = std::get<std::string>(map["shmem"]["mount_data"]);
+    shmem.mount_ring = std::get<std::string>(map["shmem"]["mount_ring"]);
     shmem.size_desc_mib = (std::size_t) std::get<int64_t>(map["shmem"]["size_desc_mib"]);
-    shmem.size_data_mib = (std::size_t) std::get<int64_t>(map["shmem"]["size_data_mib"]);
+    shmem.size_ring_mib = (std::size_t) std::get<int64_t>(map["shmem"]["size_ring_mib"]);
     rx.subdev = std::get<std::string>(map["rx"]["subdev"]);
     rx.gain = std::get<double>(map["rx"]["gain"]);
     tx.subdev = std::get<std::string>(map["tx"]["subdev"]);
