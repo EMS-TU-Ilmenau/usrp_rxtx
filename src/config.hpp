@@ -41,7 +41,7 @@ public:
 private:
     void parse(std::istream& istream);
 
-    typedef std::variant<std::string, int64_t, double> value_t;
+    using value_t = std::variant<std::string, int64_t, double>;
 
     /// nested map of above structs containing default values
     std::map<std::string, std::map<std::string, value_t>> map = {

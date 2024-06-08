@@ -96,7 +96,7 @@ try {
         // which handle time-critical network communication. therefore, elevate
         // the main thread/process to real-time priority before instantiating
         // multi_usrp, so its threads will inherit the priority.
-        struct sched_param param = {
+        const struct sched_param param = {
             .sched_priority = 99
         };
         if (sched_setscheduler(0, SCHED_FIFO, &param) == -1)

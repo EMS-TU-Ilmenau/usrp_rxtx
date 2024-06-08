@@ -17,7 +17,7 @@ public:
     class Array;
     class Object;
 
-    typedef std::variant<Null, std::string, uint64_t, int64_t, double, bool, Array, Object> json_t;
+    using json_t = std::variant<Null, std::string, uint64_t, int64_t, double, bool, Array, Object>;
 
     Json() {}
     Json(const Json& other) : variant{other.variant} {}

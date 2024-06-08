@@ -21,7 +21,7 @@ struct item {
 };
 
 static mpsc<struct item, 128, CACHE_LINE_SIZE> queue;
-static volatile std::atomic<bool> run{true};
+static volatile std::atomic<bool> run {true};
 
 // producer worker pushing increasing counter values into queue, only
 // incrementing counter when value was pushed successfully
@@ -41,7 +41,7 @@ void consumer()
 {
     uint64_t ctr[2] = { 0, 0 };
 
-    while (run) {
+    while (run.load(std::memory_order_relaxed)) {
         auto obj = queue.pop();
         if (obj.has_value()) {
             struct item s = std::move(obj.value());
