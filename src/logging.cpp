@@ -193,10 +193,12 @@ void Log::Exit::serialize(std::ostream& console, std::ostream& logfile) const
 
 void Log::Uhd::serialize(std::ostream& console, std::ostream& logfile) const
 {
-    console << time_short() << ' '
-            << std::right << std::setw(5) << level.to_string_ralign_color()
-            << ": UHD/" << info.component << ": "
-            << info.message << std::endl;
+    if (info.verbosity >= uhd::log::info) {
+        console << time_short() << ' '
+                << std::right << std::setw(5) << level.to_string_ralign_color()
+                << ": UHD/" << info.component << ": "
+                << info.message << std::endl;
+    }
 
     Json::Object{{
         { "_time", std::move(time_rfc3339()) },
@@ -204,8 +206,6 @@ void Log::Uhd::serialize(std::ostream& console, std::ostream& logfile) const
         { "_level", Log::Level{info.verbosity}.to_string() },
         { "_type", "uhd" },
         { "component", info.component },
-        { "file", info.file },
-        { "line", (int64_t) info.line },
         { "message", info.message }
     }}.dump(&logfile);
     logfile << '\n';
@@ -213,18 +213,92 @@ void Log::Uhd::serialize(std::ostream& console, std::ostream& logfile) const
 
 void Log::UsrpChannels::serialize(std::ostream& console, std::ostream& logfile) const
 {
+    // not logging to console
     (void) console;
-    (void) logfile;
 
-    throw not_implemented_error{"not yet implemented"};
+    Json::Array chans_rx;
+    int num_chan_rx = usrp->get_rx_num_channels();
+    for (int chan = 0; chan < num_chan_rx; chan++) {
+        chans_rx.emplace_back(Json::Object {{
+            { "rate", usrp->get_rx_rate(chan) },
+            { "gain", usrp->get_rx_gain(chan) }
+        }});
+    }
+
+    Json::Array chans_tx;
+    int num_chan_tx = usrp->get_tx_num_channels();
+    for (int chan = 0; chan < num_chan_tx; chan++) {
+        chans_tx.emplace_back(Json::Object {{
+            { "rate", usrp->get_rx_rate(chan) },
+            { "gain", usrp->get_rx_gain(chan) }
+        }});
+    }
+
+    Json::Object{{
+        { "_time", std::move(time_rfc3339()) },
+        { "_time_ns", (int64_t) time_epoch_ns() },
+        { "_level", Log::INFO.to_string() },
+        { "_type", "channels" },
+        { "rx", std::move(chans_rx) },
+        { "tx", std::move(chans_tx) },
+    }}.dump(&logfile);
+    logfile << '\n';
 }
 
 void Log::UsrpHardware::serialize(std::ostream& console, std::ostream& logfile) const
 {
+    // not logging to console
     (void) console;
-    (void) logfile;
 
-    throw not_implemented_error{"not yet implemented"};
+    // get property tree
+    uhd::property_tree::sptr tree = usrp->get_device()->get_tree();
+
+    // get motherboard infos
+    Json::Array info_mboard;
+    for (const std::string& mb_num : tree->list("/mboards")) {
+        uhd::usrp::mboard_eeprom_t mb_eeprom =
+            tree->access<uhd::usrp::mboard_eeprom_t>(
+                "/mboards/" + mb_num + "/eeprom").get();
+
+        Json::Object info;
+        for (const std::string& key : mb_eeprom.keys()) {
+            info.emplace_back(key, mb_eeprom[key]);
+        }
+        info_mboard.emplace_back(info);
+    }
+
+    // get infos about RX channels
+    Json::Array info_rx;
+    int num_chan_rx = usrp->get_rx_num_channels();
+    for (int chan = 0; chan < num_chan_rx; chan++) {
+        Json::Object info;
+        for (const std::string& key : usrp->get_usrp_rx_info(chan).keys()) {
+            info.emplace_back(key, usrp->get_usrp_rx_info(chan)[key]);
+        }
+        info_rx.emplace_back(info);
+    }
+
+    // get infos about TX channels
+    Json::Array info_tx;
+    int num_chan_tx = usrp->get_tx_num_channels();
+    for (int chan = 0; chan < num_chan_tx; chan++) {
+        Json::Object info;
+        for (const std::string& key : usrp->get_usrp_tx_info(chan).keys()) {
+            info.emplace_back(key, usrp->get_usrp_tx_info(chan)[key]);
+        }
+        info_tx.emplace_back(info);
+    }
+
+    Json::Object{{
+        { "_time", std::move(time_rfc3339()) },
+        { "_time_ns", (int64_t) time_epoch_ns() },
+        { "_level", Log::INFO.to_string() },
+        { "_type", "hardware" },
+        { "motherboards", std::move(info_mboard) },
+        { "daughterboards_rx", std::move(info_rx) },
+        { "daughterboards_tx", std::move(info_tx) },
+    }}.dump(&logfile);
+    logfile << '\n';
 }
 
 Logger::Logger(const std::filesystem::path& path_prefix, Json::Object&& config)
@@ -258,6 +332,7 @@ Logger::Logger(const std::filesystem::path& path_prefix, Json::Object&& config)
 
     // log software origin and commit hash
     Json::Object{{
+        { "_level", Log::DEBUG.to_string() },
         { "_type", "software" },
         { "git_origin", std::string{git_origin} },
         { "git_hash", std::string{git_hash} }
@@ -266,6 +341,7 @@ Logger::Logger(const std::filesystem::path& path_prefix, Json::Object&& config)
 
     // log hostname and uname
     Json::Object{{
+        { "_level", Log::DEBUG.to_string() },
         { "_type", "host" },
         { "hostname", std::string{hostname} },
         { "uname", unamebuf.str() }
@@ -274,6 +350,7 @@ Logger::Logger(const std::filesystem::path& path_prefix, Json::Object&& config)
 
     // log contents of loaded configuration file
     Json::Object{{
+        { "_level", Log::DEBUG.to_string() },
         { "_type", "config" },
         { "config", config }
     }}.dump(&log_file);
@@ -323,15 +400,18 @@ try {
         //       consume here.
         for (auto opt = queue.pop(); opt.has_value(); opt = queue.pop()) {
             // defer formatting to individual variant's .serialize() function
-            // TODO: pass std::ostringstream instead of std::cerr to coalesce
-            //       terminal output
-            std::visit([this](auto& arg){
+            std::ostringstream buf;
+            std::visit([&buf, this](auto& arg){
                 // FIXME: Log::*::serialize() prints ANSI escape codes to
                 //        colorize log levels without verifying that console
                 //        has color support
                 // TODO: check environment variable TERM ends with "color"
-                return arg.serialize(std::cerr, log_file);
+                return arg.serialize(buf, log_file);
             }, opt.value());
+
+            // TODO: coalesce terminal output of multiple consecutive messages
+            //       without accumulating too many messages in case of bursts.
+            std::cerr << buf.str();
         }
     }
 } catch (const std::exception& e) {
