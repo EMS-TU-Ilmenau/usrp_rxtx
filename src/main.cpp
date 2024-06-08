@@ -6,6 +6,7 @@
 
 #include <uhd/version.hpp>
 #include <uhd/usrp/multi_usrp.hpp>
+#include <uhd/utils/log_add.hpp>
 
 #include "config.hpp"
 #include "error.hpp"
@@ -17,6 +18,19 @@
 #if UHD_VERSION < 4030000
     #warning compatibility with UHD versions < 4.3.0 is not verified
 #endif
+
+// global Logger::sptr required by log_uhd and exception handlers
+static Logger::sptr logger;
+
+// global function enqueueing UHD log messages into our Logger
+static void log_uhd(const uhd::log::logging_info& uhd_logging_info)
+{
+    if (logger) {;
+        logger->log_uhd(uhd_logging_info);
+    } else {
+        return;
+    }
+}
 
 int main(int argc, char *argv[])
 try {
@@ -37,16 +51,22 @@ try {
     if (ret != 0)
         throw syscall_error{"pthread_sigmask() failed", ret};
 
-    // spawn Logger
-    Logger::sptr logger = std::make_shared<Logger>("usrp_rxtx", std::move(cfg.to_json()));
+    // spawn Logger and set up UHD logging
+    logger = std::make_shared<Logger>("usrp_rxtx", std::move(cfg.to_json()));
+    uhd::log::set_console_level(uhd::log::off);
+    uhd::log::add_logger("asdf", log_uhd);
+
+    logger->log("Initializing ...", Log::INFO);
 
     // spawn MQTT client
-    Mqtt::sptr mqtt = std::make_shared<Mqtt>();
+    MqttClient::sptr mqtt = std::make_shared<MqttClient>(logger);
 
     // allocate ringbuffer
     // NOTE: allocate 2M hugepages via `echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages`
     Ringbuf ring{cfg.shmem.mount_desc + "/usrp_rxtx_desc", cfg.shmem.size_desc_mib << 20,
                  cfg.shmem.mount_ring + "/usrp_rxtx_ring", cfg.shmem.size_ring_mib << 20};
+
+    logger->log("Initialization succeeded.");
 
     // run until interrupted
     int n = 0;
@@ -58,18 +78,46 @@ try {
         if (ret == -1 && errno != EAGAIN) {
             throw syscall_error{"sigtimedwait() failed"};
         } else if (ret == SIGINT || ret == SIGTERM) {
+            logger->log("Received SIGINT or SIGTERM. Exiting gracefully.");
             break;
         }
 
+        if (!logger->is_running()) {
+            std::cerr << "Logging thread stopped unexpectedly. Logging is broken. Terminating."
+                      << std::endl;
+            return 1;
+        }
+
+        if (!mqtt->is_running()) {
+            logger->log("MQTT client thread stopped unexpectedly. Terminating.",
+                        Log::FATAL);
+            logger->log_exit(1);
+            return 1;
+        }
+
         std::string mesg = "Main loop iteration: " + std::to_string(n++);
-        logger->log(std::move(mesg));
+        logger->log(std::move(mesg), Log::TRACE);
     }
 
+    logger->log_exit(0);
     return 0;
 } catch (const std::exception& e) {
-    std::cerr << e.what() << std::endl;
+    if (logger) {
+        logger->log_exception(std::current_exception());
+        logger->log("Exception occurred in main thread. Terminating.", Log::FATAL);
+    } else {
+        std::cerr << "Exception: " << e.what() << '\n'
+                  << "Exception occurred in main thread. Terminating." << std::endl;
+    }
+
     return 1;
 } catch (...) {
-    std::cerr << "Unknown exception" << std::endl;
+    if (logger) {
+        logger->log_exception(std::current_exception());
+        logger->log("Terminating after exception occurred in main thread.", Log::FATAL);
+    } else {
+        std::cerr << "Unknown exception occurred in main thread. Terminating." << std::endl;
+    }
+
     return 1;
 }

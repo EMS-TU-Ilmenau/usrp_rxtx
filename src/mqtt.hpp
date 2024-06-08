@@ -13,6 +13,7 @@
 #include <thread>
 
 #include "error.hpp"
+#include "logging.hpp"
 #include "mosquitto.h"
 
 class mqtt_error : public error {
@@ -30,27 +31,25 @@ public:
     }
 };
 
-class Mqtt {
+class MqttClient {
 public:
-    using sptr = std::shared_ptr<Mqtt>;
+    using sptr = std::shared_ptr<MqttClient>;
 
-    Mqtt();
-    ~Mqtt();
+    MqttClient(Logger::sptr logger);
+    ~MqttClient();
 
     // delete copy constructor and copy assignment operator
-    Mqtt(const Mqtt&) = delete;
-    Mqtt& operator=(const Mqtt&) = delete;
-
-    void stop();
+    MqttClient(const MqttClient&) = delete;
+    MqttClient& operator=(const MqttClient&) = delete;
 
     inline bool is_running()
-        { return run; }
-    std::string get_status();
+    { return run.load(std::memory_order_relaxed); }
 
 private:
     volatile std::atomic<bool> run;
     std::thread worker_handle;
 
+    Logger::sptr logger;
     struct mosquitto *mosq;
 
     void worker();

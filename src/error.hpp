@@ -37,6 +37,20 @@ public:
     }
 };
 
+class not_implemented_error : public error {
+public:
+    not_implemented_error(const std::string& message,
+                          const std::source_location location
+                              = std::source_location::current())
+    {
+        std::stringstream buf;
+        buf << "not_implemented_error: "
+            << location.file_name() << ':' << location.line() << ": "
+            << message << ": " << message;
+        what_str = std::move(buf.str());
+    }
+};
+
 class syscall_error : public error {
 public:
     syscall_error(const std::string& message,

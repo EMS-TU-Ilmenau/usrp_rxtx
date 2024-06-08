@@ -22,7 +22,7 @@ ShmMmap::ShmMmap(const std::filesystem::path& path, size_t size)
     // create file
     fd = open(path.c_str(), O_CREAT | O_EXCL | O_RDWR, 0644);
     if (fd == -1)
-        throw syscall_error{"open() failed"};
+        throw syscall_error{"open(\"" + path.generic_string() + "\", ...) failed"};
 
     // grow file to requested size
     if (ftruncate(fd, size) == -1) {

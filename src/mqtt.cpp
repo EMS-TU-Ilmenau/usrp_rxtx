@@ -1,8 +1,8 @@
 #include "mqtt.hpp"
 
-Mqtt::Mqtt()
+MqttClient::MqttClient(Logger::sptr logger)
 {
-    // FIXME: assumes Mqtt() is used as singleton
+    // FIXME: assumes MqttClient() is used as singleton
     mosquitto_lib_init();
 
     int rc = 0;
@@ -22,27 +22,28 @@ Mqtt::Mqtt()
         throw mqtt_error{"mosquitto_connect() failed", rc};
     }
 
+    this->logger = logger;
+
     // spawn worker
     run = true;
-    worker_handle = std::thread{&Mqtt::worker, this};
+    worker_handle = std::thread{&MqttClient::worker, this};
 }
 
-Mqtt::~Mqtt()
+MqttClient::~MqttClient()
 {
-    stop();
+    // stop and join worker thread
+    run.store(false, std::memory_order_relaxed);
+    worker_handle.join();
+
+    // disconnect and clean up
+    mosquitto_disconnect(mosq);
     mosquitto_destroy(mosq);
-    // FIXME: assumes Mqtt() is used as singleton
+    // FIXME: assumes MqttClient() is used as singleton
     mosquitto_lib_cleanup();
 }
 
-void Mqtt::stop()
-{
-    if (run.exchange(false))
-        worker_handle.join();
-}
-
-void Mqtt::worker()
-{
+void MqttClient::worker()
+try {
 #ifdef _GNU_SOURCE
     pthread_setname_np(pthread_self(), "mqtt");
 #endif
@@ -63,8 +64,19 @@ void Mqtt::worker()
         }
 
         // run mosquitto network loop (will return early and often on activity)
+        // TODO: error handling on recoverable errors, most importantly
+        //       mosquitto_reconnect() on MOSQ_ERR_CONN_LOST
         rc = mosquitto_loop(mosq, 100, 1);
         if (rc != MOSQ_ERR_SUCCESS)
             throw mqtt_error{"mosquitto_loop() failed", rc};
     }
+} catch (const std::exception& e) {
+    logger->log_exception(std::current_exception());
+    logger->log("Unrecoverable exception occurred in MQTT client thread. Thread terminated.",
+                Log::FATAL);
+    run.store(false, std::memory_order_relaxed);
+} catch (...) {
+    logger->log("Unknown exception occurred in MQTT client thread. Thread terminated.",
+                Log::FATAL);
+    run.store(false, std::memory_order_relaxed);
 }
