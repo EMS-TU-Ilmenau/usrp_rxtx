@@ -64,6 +64,12 @@ public:
         desc->head.store(_head, std::memory_order_release);
     }
 
+    void set_descriptor_info(uint64_t start_nsec, double sample_rate_hz)
+    {
+        desc->start_nsec = start_nsec;
+        desc->sample_rate_hz = sample_rate_hz;
+    };
+
 #ifndef TEST_RINGBUF
 private:
 #endif

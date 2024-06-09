@@ -244,7 +244,7 @@ public:
     };
 
 private:
-    std::atomic<bool> run {false};
+    std::atomic<bool> run {true};
     std::thread worker_handle;
 
     mpsc<std::variant<Log::Null,

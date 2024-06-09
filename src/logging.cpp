@@ -242,11 +242,12 @@ void Log::UhdRxMetadata::serialize(std::ostream& console, std::ostream& logfile)
 
     Json::Object obj {{
         { "error_code", error_code },
+        { "out_of_sequence", rx_meta.out_of_sequence },
         { "start_of_burst", rx_meta.start_of_burst },
         { "end_of_burst", rx_meta.end_of_burst },
-        { "out_of_sequence", rx_meta.out_of_sequence },
         { "has_time_spec", rx_meta.has_time_spec },
-        { "time_spec", rx_meta.time_spec.get_real_secs() }
+        { "time_spec", (uint64_t) (rx_meta.time_spec.get_full_secs() * 1e9) +
+                       (uint64_t) (rx_meta.time_spec.get_frac_secs() * 1e9) }
     }};
 
     console << time_short() << ' '
@@ -259,10 +260,12 @@ void Log::UhdRxMetadata::serialize(std::ostream& console, std::ostream& logfile)
         { "_level", level.to_string() },
         { "_type", "rx_metadata" },
         { "error_code", rx_meta.strerror() },
+        { "out_of_sequence", rx_meta.out_of_sequence },
         { "start_of_burst", rx_meta.start_of_burst },
         { "end_of_burst", rx_meta.end_of_burst },
-        { "out_of_sequence", rx_meta.out_of_sequence },
-        { "has_time_spec", rx_meta.has_time_spec }
+        { "has_time_spec", rx_meta.has_time_spec },
+        { "time_spec", (uint64_t) (rx_meta.time_spec.get_full_secs() * 1e9) +
+                       (uint64_t) (rx_meta.time_spec.get_frac_secs() * 1e9) }
     }}.dump(&logfile);
     logfile << '\n';
 }
@@ -290,9 +293,10 @@ void Log::UhdStreamCmd::serialize(std::ostream& console, std::ostream& logfile) 
 
     Json::Object obj {{
         { "stream_mode", stream_mode },
-        { "stream_now", stream_cmd.stream_now },
         { "num_samps", stream_cmd.num_samps },
-        { "time_spec", stream_cmd.time_spec.get_real_secs() }
+        { "stream_now", stream_cmd.stream_now },
+        { "time_spec", (uint64_t) (stream_cmd.time_spec.get_full_secs() * 1e9) +
+                       (uint64_t) (stream_cmd.time_spec.get_frac_secs() * 1e9) }
     }};
 
     console << time_short() << ' '
@@ -305,9 +309,10 @@ void Log::UhdStreamCmd::serialize(std::ostream& console, std::ostream& logfile) 
         { "_level", level.to_string() },
         { "_type", "rx_metadata" },
         { "stream_mode", stream_mode },
-        { "stream_now", stream_cmd.stream_now },
         { "num_samps", stream_cmd.num_samps },
-        { "time_spec", stream_cmd.time_spec.get_real_secs() }
+        { "stream_now", stream_cmd.stream_now },
+        { "time_spec", (uint64_t) (stream_cmd.time_spec.get_full_secs() * 1e9) +
+                       (uint64_t) (stream_cmd.time_spec.get_frac_secs() * 1e9) }
     }}.dump(&logfile);
     logfile << '\n';
 }
@@ -457,9 +462,8 @@ Logger::Logger(const std::filesystem::path& path_prefix, Json::Object&& config)
     }}.dump(&log_file);
     log_file << '\n';
 
-    // spawn and wait for worker
+    // spawn worker
     worker_handle = std::thread{&Logger::worker, this};
-    run.wait(false);
 }
 
 /// @brief Stop logging worker thread.
@@ -480,10 +484,6 @@ try {
 #ifdef _GNU_SOURCE
     pthread_setname_np(pthread_self(), "logging");
 #endif
-
-    // notify constructor
-    run.store(true, std::memory_order_seq_cst);
-    run.notify_one();
 
     // producer-side notification does not lock the mutex, so we can hold the
     // lock continuously

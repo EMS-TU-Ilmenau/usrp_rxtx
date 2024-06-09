@@ -1,9 +1,7 @@
 #include "error.hpp"
 #include "rx.hpp"
 
-Rx::Rx(uhd::usrp::multi_usrp::sptr usrp,
-       Logger::sptr logger,
-       const Config& cfg)
+Rx::Rx(uhd::usrp::multi_usrp::sptr usrp, Logger::sptr logger, const Config& cfg)
     : usrp{usrp}
     , logger{logger}
 {
@@ -26,8 +24,8 @@ Rx::Rx(uhd::usrp::multi_usrp::sptr usrp,
     }
 
     // spawn worker
-    run.store(true, std::memory_order_seq_cst);
     worker_handle = std::thread{&Rx::worker, this};
+    worker_latch.wait();
 }
 
 Rx::~Rx()
@@ -35,6 +33,12 @@ Rx::~Rx()
     // stop and join worker thread
     run.store(false, std::memory_order_relaxed);
     worker_handle.join();
+}
+
+static inline auto timespec_to_nsec(const uhd::time_spec_t& time) -> uint64_t
+{
+    return (uint64_t) (time.get_full_secs() * 1e9) +
+           (uint64_t) (time.get_frac_secs() * 1e9);
 }
 
 void Rx::worker()
@@ -58,60 +62,91 @@ try {
         stream_args.channels.push_back(n);
     uhd::rx_streamer::sptr rx = usrp->get_rx_stream(stream_args);
 
-    // start on next full second at least half a second in the future
+    // cache constant parameters
+    const double sample_rate_hz = usrp->get_rx_rate();
+    const size_t num_channels = rx->get_num_channels();
+    const size_t max_num_samps = rx->get_max_num_samps();
+
+    /// buffer pointers for uhd::rx_streamer::recv()
+    std::vector<void *> buf_ptrs(rx->get_num_channels());
+    /// temporary buffers for samples that cannot be received directly into
+    /// the Ringbufs (e.g., when relocation is needed after overflow)
+    std::vector<std::vector<std::complex<int16_t>>> tmp_bufs(
+        num_channels, std::vector<std::complex<int16_t>>(max_num_samps));
+
+    /// start time on next full second at least half a second in the future
     uhd::time_spec_t start_time = usrp->get_time_now();
-    uint64_t sleep_msec;
     if (start_time.get_frac_secs() < 0.5) {
-        sleep_msec = 1000 * (1. - start_time.get_frac_secs());
         start_time = uhd::time_spec_t(start_time.get_full_secs() + 1, 0.);
     } else {
-        sleep_msec = 1000 * (2. - start_time.get_frac_secs());
         start_time = uhd::time_spec_t(start_time.get_full_secs() + 2, 0.);
     }
 
+    /// time of first sample in Ringbuf in nanoseconds
+    const uint64_t start_time_nsec = timespec_to_nsec(start_time);
+    for (size_t n = 0; n < num_channels; n++) {
+        ringbufs[n]->set_descriptor_info(start_time_nsec, sample_rate_hz);
+    }
+
+    // Ringbufs have been fully initialized, so wake up constructor
+    worker_latch.count_down();
+
     // start streaming
-    uhd::stream_cmd_t stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
+    uhd::stream_cmd_t stream_cmd {uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS};
     stream_cmd.stream_now = false;
     stream_cmd.time_spec = start_time;
     stream_cmd.num_samps = 0;
     rx->issue_stream_cmd(stream_cmd);
     logger->log_uhd_stream_cmd(stream_cmd);
 
-    // sleep until USRP starts streaming
-    std::this_thread::sleep_for(std::chrono::milliseconds{sleep_msec});
+    /// timeout for uhd::rx_streamer::recv()
+    double recv_timeout = 2.0;
 
-    size_t num_channels = rx->get_num_channels();
-    size_t max_num_samps = rx->get_max_num_samps();
-    std::vector<void *> buf_ptrs(rx->get_num_channels());
     while (run.load(std::memory_order_relaxed)) {
-        // get a span for a single packet from each Ringbuf
-        size_t recv_samples = max_num_samps;
+        // get an std::span fitting a single packet from each Ringbuf
+        size_t recv_max_samples = max_num_samps;
         for (size_t n = 0; n < num_channels; n++) {
             auto span = ringbufs[n]->get_producer_span(max_num_samps * sample_size);
             buf_ptrs[n] = (void *) span.data();
-            recv_samples = std::min(recv_samples, span.size_bytes() / sample_size);
+            recv_max_samples = std::min(recv_max_samples, span.size_bytes() / sample_size);
         }
 
         // receive packet for each channel from USRP
         uhd::rx_metadata_t md;
-        size_t samples = rx->recv(buf_ptrs, recv_samples, md, 1., true);
+        size_t samples = rx->recv(buf_ptrs, recv_max_samples, md, recv_timeout, true);
 
         // error handling
-        // TODO: implement
         if (samples == 0) {
+            logger->log_uhd_rx_metadata(md);
+
             // see: http://files.ettus.com/manual/structuhd_1_1rx__metadata__t.html
             switch (md.error_code) {
             case uhd::rx_metadata_t::ERROR_CODE_NONE:
-                // ignore
+                // should not occur. was logged above, so ignore.
                 break;
             case uhd::rx_metadata_t::ERROR_CODE_OVERFLOW:
-            case uhd::rx_metadata_t::ERROR_CODE_TIMEOUT:
-            case uhd::rx_metadata_t::ERROR_CODE_LATE_COMMAND:
-            case uhd::rx_metadata_t::ERROR_CODE_BROKEN_CHAIN:
+                // MANUAL: An internal receive buffer has filled or a sequence
+                //         error has been detected. [...]
+                //         Data is missing between this time_spec and the and
+                //         the time_spec of the next successful receive.
+                // the next uhd::rx_streamer::recv() call will likely return
+                // samples, so keep receiving. should no more samples arrive,
+                // it will be caught by the timeout handling below.
+                // TODO: implement zero padding to maintain continuous sample
+                //       stream.
+                logger->log("Sample stream continuity lost after overflow/out_of_sequence error.",
+                            Log::ERROR);
+                break;
             case uhd::rx_metadata_t::ERROR_CODE_ALIGNMENT:
             case uhd::rx_metadata_t::ERROR_CODE_BAD_PACKET:
-            default:
-                logger->log_uhd_rx_metadata(md);
+            case uhd::rx_metadata_t::ERROR_CODE_BROKEN_CHAIN:
+            case uhd::rx_metadata_t::ERROR_CODE_LATE_COMMAND:
+            case uhd::rx_metadata_t::ERROR_CODE_TIMEOUT:
+                // presumably fatal errors. surrender and terminate the thread.
+                // TODO: implement recovery by stopping and restarting the
+                //       stream without causing an infinite restart deadlock.
+                logger->log("Rx thread encountered irrecoverable error. Terminating.",
+                            Log::FATAL);
                 run.store(false, std::memory_order_relaxed);
                 break;
             }
@@ -119,9 +154,12 @@ try {
             continue;
         }
 
+        // reduce timeout on first successful uhd::rx_streamer::recv()
+        recv_timeout = 0.1;
+
         // process received samples
         for (size_t n = 0; n < num_channels; n++) {
-            ringbufs[n]->produce(samples * 4);
+            ringbufs[n]->produce(samples * sample_size);
         }
     }
 
