@@ -1,12 +1,12 @@
-#include "error.hpp"
-#include "json.hpp"
-#include "logging.hpp"
-#include "version.hpp"
-
 extern "C" {
     #include <sys/utsname.h>
     #include <unistd.h>
 }
+
+#include "error.hpp"
+#include "json.hpp"
+#include "logging.hpp"
+#include "version.hpp"
 
 /// return error level formatted as std::string
 auto Log::Level::to_string() const -> const std::string
@@ -138,7 +138,7 @@ void Log::Misc::serialize(std::ostream& console, std::ostream& logfile) const
 
     Json::Object{{
         { "_time", std::move(time_rfc3339()) },
-        { "_time_ns", (int64_t) time_epoch_ns() },
+        { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
         { "_type", Json::Null{} },
         { "message", msg }
@@ -164,7 +164,7 @@ void Log::Exception::serialize(std::ostream& console, std::ostream& logfile) con
 
     Json::Object{{
         { "_time", std::move(time_rfc3339()) },
-        { "_time_ns", (int64_t) time_epoch_ns() },
+        { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
         { "_type", "exception" },
         { "what", std::move(what) }
@@ -183,15 +183,15 @@ void Log::Exit::serialize(std::ostream& console, std::ostream& logfile) const
 
     Json::Object{{
         { "_time", std::move(time_rfc3339()) },
-        { "_time_ns", (int64_t) time_epoch_ns() },
+        { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
         { "_type", "exit" },
-        { "exit_code", (int64_t) exit_code }
+        { "exit_code", exit_code }
     }}.dump(&logfile);
     logfile << '\n';
 }
 
-void Log::Uhd::serialize(std::ostream& console, std::ostream& logfile) const
+void Log::UhdLogInfo::serialize(std::ostream& console, std::ostream& logfile) const
 {
     if (info.verbosity >= uhd::log::info) {
         console << time_short() << ' '
@@ -202,11 +202,112 @@ void Log::Uhd::serialize(std::ostream& console, std::ostream& logfile) const
 
     Json::Object{{
         { "_time", std::move(time_rfc3339()) },
-        { "_time_ns", (int64_t) time_epoch_ns() },
+        { "_time_ns", time_epoch_ns() },
         { "_level", Log::Level{info.verbosity}.to_string() },
         { "_type", "uhd" },
         { "component", info.component },
         { "message", info.message }
+    }}.dump(&logfile);
+    logfile << '\n';
+}
+
+void Log::UhdRxMetadata::serialize(std::ostream& console, std::ostream& logfile) const
+{
+    Json::json_t error_code;
+    switch (rx_meta.error_code) {
+    case uhd::rx_metadata_t::ERROR_CODE_NONE:
+        error_code = "ERROR_CODE_NONE";
+        break;
+    case uhd::rx_metadata_t::ERROR_CODE_LATE_COMMAND:
+        error_code = "ERROR_CODE_LATE_COMMAND";
+        break;
+    case uhd::rx_metadata_t::ERROR_CODE_ALIGNMENT:
+        error_code = "ERROR_CODE_ALIGNMENT";
+        break;
+    case uhd::rx_metadata_t::ERROR_CODE_BAD_PACKET:
+        error_code = "ERROR_CODE_BAD_PACKET";
+        break;
+    case uhd::rx_metadata_t::ERROR_CODE_BROKEN_CHAIN:
+        error_code = "ERROR_CODE_BROKEN_CHAIN";
+        break;
+    case uhd::rx_metadata_t::ERROR_CODE_OVERFLOW:
+        error_code = "ERROR_CODE_OVERFLOW";
+        break;
+    case uhd::rx_metadata_t::ERROR_CODE_TIMEOUT:
+        error_code = "ERROR_CODE_TIMEOUT";
+        break;
+    default:
+        error_code = (uint64_t) rx_meta.error_code;
+    }
+
+    Json::Object obj {{
+        { "error_code", error_code },
+        { "start_of_burst", rx_meta.start_of_burst },
+        { "end_of_burst", rx_meta.end_of_burst },
+        { "out_of_sequence", rx_meta.out_of_sequence },
+        { "has_time_spec", rx_meta.has_time_spec },
+        { "time_spec", rx_meta.time_spec.get_real_secs() }
+    }};
+
+    console << time_short() << ' '
+            << std::right << std::setw(5) << level.to_string_ralign_color()
+            << ": rx_metadata_t: " << obj.dumps() << std::endl;
+
+    Json::Object{{
+        { "_time", std::move(time_rfc3339()) },
+        { "_time_ns", time_epoch_ns() },
+        { "_level", level.to_string() },
+        { "_type", "rx_metadata" },
+        { "error_code", rx_meta.strerror() },
+        { "start_of_burst", rx_meta.start_of_burst },
+        { "end_of_burst", rx_meta.end_of_burst },
+        { "out_of_sequence", rx_meta.out_of_sequence },
+        { "has_time_spec", rx_meta.has_time_spec }
+    }}.dump(&logfile);
+    logfile << '\n';
+}
+
+void Log::UhdStreamCmd::serialize(std::ostream& console, std::ostream& logfile) const
+{
+    Json::json_t stream_mode;
+    switch (stream_cmd.stream_mode) {
+    case uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS:
+        stream_mode = "STREAM_MODE_START_CONTINUOUS";
+        break;
+    case uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS:
+        stream_mode = "STREAM_MODE_STOP_CONTINUOUS";
+        break;
+    case uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_DONE:
+        stream_mode = "STREAM_MODE_NUM_SAMPS_AND_DONE";
+        break;
+    case uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_MORE:
+        stream_mode = "STREAM_MODE_NUM_SAMPS_AND_MORE";
+        break;
+    default:
+        stream_mode = (uint64_t) stream_cmd.stream_mode;
+        break;
+    }
+
+    Json::Object obj {{
+        { "stream_mode", stream_mode },
+        { "stream_now", stream_cmd.stream_now },
+        { "num_samps", stream_cmd.num_samps },
+        { "time_spec", stream_cmd.time_spec.get_real_secs() }
+    }};
+
+    console << time_short() << ' '
+            << std::right << std::setw(5) << level.to_string_ralign_color()
+            << ": stream_cmd_t: " << obj.dumps() << std::endl;
+
+    Json::Object{{
+        { "_time", std::move(time_rfc3339()) },
+        { "_time_ns", time_epoch_ns() },
+        { "_level", level.to_string() },
+        { "_type", "rx_metadata" },
+        { "stream_mode", stream_mode },
+        { "stream_now", stream_cmd.stream_now },
+        { "num_samps", stream_cmd.num_samps },
+        { "time_spec", stream_cmd.time_spec.get_real_secs() }
     }}.dump(&logfile);
     logfile << '\n';
 }
@@ -236,7 +337,7 @@ void Log::UsrpChannels::serialize(std::ostream& console, std::ostream& logfile) 
 
     Json::Object{{
         { "_time", std::move(time_rfc3339()) },
-        { "_time_ns", (int64_t) time_epoch_ns() },
+        { "_time_ns", time_epoch_ns() },
         { "_level", Log::INFO.to_string() },
         { "_type", "channels" },
         { "rx", std::move(chans_rx) },
@@ -291,7 +392,7 @@ void Log::UsrpHardware::serialize(std::ostream& console, std::ostream& logfile) 
 
     Json::Object{{
         { "_time", std::move(time_rfc3339()) },
-        { "_time_ns", (int64_t) time_epoch_ns() },
+        { "_time_ns", time_epoch_ns() },
         { "_level", Log::INFO.to_string() },
         { "_type", "hardware" },
         { "motherboards", std::move(info_mboard) },
@@ -366,9 +467,12 @@ Logger::Logger(const std::filesystem::path& path_prefix, Json::Object&& config)
 ///          log producing threads have been terminated.
 Logger::~Logger()
 {
+    // stop and join the worker thread
     run.store(false, std::memory_order_relaxed);
     worker_handle.join();
-    log_file.close();
+
+    // serialize all remaining messages left in log queue
+    serialize_messages();
 }
 
 void Logger::worker()
@@ -394,25 +498,11 @@ try {
 
         // TODO: check for lost log messages
 
-        // drain queue
+        // serialize all currently queued messages (drains queue)
         // NOTE: will block destructor until queue is empty, so may cause
         //       deadlock if another thread keeps logging faster than we
         //       consume here.
-        for (auto opt = queue.pop(); opt.has_value(); opt = queue.pop()) {
-            // defer formatting to individual variant's .serialize() function
-            std::ostringstream buf;
-            std::visit([&buf, this](auto& arg){
-                // FIXME: Log::*::serialize() prints ANSI escape codes to
-                //        colorize log levels without verifying that console
-                //        has color support
-                // TODO: check environment variable TERM ends with "color"
-                return arg.serialize(buf, log_file);
-            }, opt.value());
-
-            // TODO: coalesce terminal output of multiple consecutive messages
-            //       without accumulating too many messages in case of bursts.
-            std::cerr << buf.str();
-        }
+        serialize_messages();
     }
 } catch (const std::exception& e) {
     std::cerr << "Exception: " << e.what() << '\n'
@@ -423,4 +513,24 @@ try {
     std::cerr << "Unknown exception occurred in logging thread. Log messages may have been lost. Thread terminated."
               << std::endl;
     run.store(false, std::memory_order_relaxed);
+}
+
+/// serialize all currently queued log messages
+void Logger::serialize_messages()
+{
+    for (auto opt = queue.pop(); opt.has_value(); opt = queue.pop()) {
+        // defer formatting to individual variant's .serialize() function
+        std::ostringstream buf;
+        std::visit([&buf, this](auto& arg){
+            // FIXME: Log::*::serialize() prints ANSI escape codes to
+            //        colorize log levels without verifying that console
+            //        has color support
+            // TODO: check environment variable TERM ends with "color"
+            return arg.serialize(buf, log_file);
+        }, opt.value());
+
+        // TODO: coalesce terminal output of multiple consecutive messages
+        //       without accumulating too many messages in case of bursts.
+        std::cerr << buf.str();
+    }
 }

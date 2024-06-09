@@ -17,6 +17,7 @@ extern "C" {
 #include "logging.hpp"
 #include "mqtt.hpp"
 #include "ringbuf.hpp"
+#include "rx.hpp"
 
 // warn about unsupported UHD versions
 #if UHD_VERSION < 4030000
@@ -58,16 +59,15 @@ try {
 
     // spawn Logger
     logger = std::make_shared<Logger>("usrp_rxtx", std::move(cfg.to_json()));
+    logger->log("Initializing ...", Log::INFO);
+
+    // set up UHD logging
+    uhd::log::add_logger("usrp_rxtx", log_uhd);
+    uhd::log::set_console_level(uhd::log::off);
 
     // logger can handle all exceptions from now on
     int exit_code = 0;
     try {
-        // set up UHD logging
-        uhd::log::set_console_level(uhd::log::off);
-        uhd::log::add_logger("asdf", log_uhd);
-
-        logger->log("Initializing ...", Log::INFO);
-
         // spawn MQTT client
         MqttClient::sptr mqtt = std::make_shared<MqttClient>(logger);
 
@@ -110,39 +110,22 @@ try {
         if (sched_setscheduler(0, oldsched, &oldparam) == -1)
             throw syscall_error{"sched_setscheduler() failed"};
 
-        // channel selection
+        // sample rate and channel selection
+        usrp->set_rx_rate(cfg.usrp.sample_rate);
+        usrp->set_tx_rate(cfg.usrp.sample_rate);
         usrp->set_rx_subdev_spec(uhd::usrp::subdev_spec_t{cfg.rx.subdev});
         usrp->set_tx_subdev_spec(uhd::usrp::subdev_spec_t{cfg.tx.subdev});
-        size_t rx_num_channels = usrp->get_rx_num_channels();
 
         // log USRP hardware and channel configuration
         logger->log_usrp_hardware(usrp);
         logger->log_usrp_channels(usrp);
 
-        // allocate Rx ringbuffers
         // NOTE: allocate 2M hugepages via `echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages`
-        std::vector<Ringbuf::sptr> rx_ringbufs;
-        for (size_t ch = 0; ch < rx_num_channels; ch++) {
-            std::filesystem::path desc_path {cfg.shmem.mount_desc};
-            std::filesystem::path ring_path {cfg.shmem.mount_ring};
-            desc_path /= "usrp_rxtx_" + cfg.usrp.args
-                       + "_ch" + std::to_string(ch)
-                       + "_desc";
-            ring_path /= "usrp_rxtx_" + cfg.usrp.args
-                       + "_ch" + std::to_string(ch)
-                       + "_ring";
-
-            Ringbuf::sptr ringbuf = std::make_shared<Ringbuf>(
-                desc_path, cfg.shmem.size_desc_mib << 20,
-                ring_path, cfg.shmem.size_ring_mib << 20
-            );
-            rx_ringbufs.push_back(std::move(ringbuf));
-        }
+        Rx rx {usrp, logger, cfg};
 
         logger->log("Initialization succeeded.");
 
         // run until interrupted
-        int n = 0;
         while (true) {
             // signal handling with timeout (break loop on SIGINT, or SIGTERM,
             // but ignore SIGHUP)
@@ -170,11 +153,12 @@ try {
                 break;
             }
 
-            if (n % 10 == 0) {
-                std::string mesg = "Main loop iteration: " + std::to_string(n);
-                logger->log(std::move(mesg), Log::TRACE);
+            if (!rx.is_running()) {
+                logger->log("Rx thread stopped unexpectedly. Terminating.",
+                            Log::FATAL);
+                exit_code = 1;
+                break;
             }
-            n++;
         }
     } catch (const std::exception& e) {
         exit_code = 1;
@@ -186,6 +170,7 @@ try {
     }
 
     logger->log_exit(exit_code);
+    //std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     return exit_code;
 } catch (const std::exception& e) {
     std::cerr << "Exception: " << e.what() << '\n'

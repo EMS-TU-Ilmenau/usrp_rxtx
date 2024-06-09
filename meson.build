@@ -21,7 +21,8 @@ gen_version = custom_target('gen-version',
 
 # define main target
 usrp_rxtx = executable('usrp_rxtx', 'src/main.cpp', gen_version,
-                       'src/config.cpp', 'src/logging.cpp', 'src/mqtt.cpp', 'src/ringbuf.cpp',
+                       'src/config.cpp', 'src/logging.cpp', 'src/mqtt.cpp',
+                       'src/ringbuf.cpp', 'src/rx.cpp',
                         dependencies : [dep_rt, dep_thread, dep_uhd, dep_libmosquitto])
 
 # define unit tests

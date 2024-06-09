@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <span>
 #include <string>
 
 #include "ringbuf.h"
@@ -37,11 +38,44 @@ public:
     Ringbuf(const Ringbuf&) = delete;
     Ringbuf& operator=(const Ringbuf&) = delete;
 
+    auto get_producer_span(size_t size) -> std::span<volatile uint8_t>
+    {
+        assert(desc->clob >= desc->head);
+
+        // requested span does not extend past end of buffer (no wrapping)
+        if ((_head & _mask) + size <= _size) {
+            volatile uint8_t *data = (uint8_t *) shm_ring.addr + (_head & _mask);
+            desc->clob.store(_head + size, std::memory_order_release);
+            return {data, size};
+        } else {
+            size = _size - (_head & _mask);
+            assert((_head & _mask) + size <= _size);
+            volatile uint8_t *data = (uint8_t *) shm_ring.addr + (_head & _mask);
+            desc->clob.store(_head + size, std::memory_order_release);
+            return {data, size};
+        }
+    };
+
+    void produce(size_t size)
+    {
+        assert(_head <= desc->clob);
+
+        _head += size;
+        desc->head.store(_head, std::memory_order_release);
+    }
+
+#ifndef TEST_RINGBUF
 private:
+#endif
     ShmMmap shm_desc;
     ShmMmap shm_ring;
 
     struct ringbuf *desc;
+
+    // local non-atomic descriptor values to minimize overhead for producer
+    uint64_t _head {0};
+    uint64_t _size {0};
+    uint64_t _mask {0};
 };
 
 #endif /* RINGBUF_HPP */

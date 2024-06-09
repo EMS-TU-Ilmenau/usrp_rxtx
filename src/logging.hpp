@@ -39,6 +39,7 @@ namespace Log {
         /// return error level formatted as right aligned std::string with ANSI color escapes
         auto to_string_ralign_color() const -> const std::string;
 
+    protected:
         uhd::log::severity_level level;
     };
 
@@ -108,9 +109,9 @@ namespace Log {
         int exit_code;
     };
 
-    class Uhd : public Base {
+    class UhdLogInfo : public Base {
     public:
-        Uhd(const uhd::log::logging_info& info)
+        UhdLogInfo(const uhd::log::logging_info& info)
             : Base{info.verbosity}
             , info{info}
         {};
@@ -118,6 +119,30 @@ namespace Log {
 
     protected:
         uhd::log::logging_info info;
+    };
+
+    class UhdRxMetadata : public Base {
+    public:
+        UhdRxMetadata(const uhd::rx_metadata_t& rx_meta)
+            : Base{rx_meta.error_code == 0 ? DEBUG : ERROR}
+            , rx_meta{rx_meta}
+        {};
+        void serialize(std::ostream& console, std::ostream& logfile) const;
+
+    protected:
+        uhd::rx_metadata_t rx_meta;
+    };
+
+    class UhdStreamCmd : public Base {
+    public:
+        UhdStreamCmd(const uhd::stream_cmd_t& stream_cmd)
+            : Base{INFO}
+            , stream_cmd{stream_cmd}
+        {};
+        void serialize(std::ostream& console, std::ostream& logfile) const;
+
+    protected:
+        uhd::stream_cmd_t stream_cmd;
     };
 
     class UsrpHardware : public Base {
@@ -190,7 +215,19 @@ public:
 
     void log_uhd(const uhd::log::logging_info& info)
     {
-        queue.push(Log::Uhd{info});
+        queue.push(Log::UhdLogInfo{info});
+        cond_var.notify_one();
+    };
+
+    void log_uhd_rx_metadata(const uhd::rx_metadata_t& rx_meta)
+    {
+        queue.push(Log::UhdRxMetadata{rx_meta});
+        cond_var.notify_one();
+    };
+
+    void log_uhd_stream_cmd(const uhd::stream_cmd_t& stream_cmd)
+    {
+        queue.push(Log::UhdStreamCmd{stream_cmd});
         cond_var.notify_one();
     };
 
@@ -209,11 +246,14 @@ public:
 private:
     std::atomic<bool> run {false};
     std::thread worker_handle;
+
     mpsc<std::variant<Log::Null,
                       Log::Misc,
                       Log::Exception,
                       Log::Exit,
-                      Log::Uhd,
+                      Log::UhdLogInfo,
+                      Log::UhdRxMetadata,
+                      Log::UhdStreamCmd,
                       Log::UsrpChannels,
                       Log::UsrpHardware
                      >, 1024> queue;
@@ -224,6 +264,7 @@ private:
     std::ofstream log_file;
 
     void worker();
+    void serialize_messages();
 };
 
 #endif /* LOGGING_HPP */

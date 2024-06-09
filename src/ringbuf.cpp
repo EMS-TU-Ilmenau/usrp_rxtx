@@ -60,6 +60,9 @@ Ringbuf::Ringbuf(const std::filesystem::path& desc_path, size_t desc_size,
 {
     desc = (struct ringbuf *) shm_desc.addr;
 
+    _mask = ring_size - 1;
+    _size = ring_size;
+
     // zero-initialize descriptor
     desc->start_nsec = 0;
     desc->sample_rate_hz = 0.;
