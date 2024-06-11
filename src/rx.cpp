@@ -1,3 +1,10 @@
+extern "C" {
+#ifdef _GNU_SOURCE
+    #include <pthread.h>
+#endif
+    #include <sched.h>
+}
+
 #include "error.hpp"
 #include "rx.hpp"
 
@@ -16,7 +23,7 @@ Rx::Rx(uhd::usrp::multi_usrp::sptr usrp, Logger::sptr logger, const Config& cfg)
                    + "_ch" + std::to_string(ch)
                    + "_ring";
 
-        Ringbuf::sptr ringbuf = std::make_shared<Ringbuf>(
+        Ringbuf<sample_t>::sptr ringbuf = std::make_shared<Ringbuf<sample_t>>(
             desc_path, cfg.shmem.size_desc_mib << 20,
             ring_path, cfg.shmem.size_ring_mib << 20
         );
@@ -55,7 +62,7 @@ try {
         throw syscall_error{"sched_setscheduler() failed"};
 
     // setup rx streamer
-    constexpr size_t sample_size = sizeof(std::complex<int16_t>);
+    static_assert(std::is_same<sample_t, std::complex<int16_t>>::value);
     uhd::stream_args_t stream_args {"sc16", "sc16"};
     stream_args.channels = std::vector<size_t> {};
     for (size_t n = 0; n < usrp->get_rx_num_channels(); n++)
@@ -106,9 +113,9 @@ try {
         // get an std::span fitting a single packet from each Ringbuf
         size_t recv_max_samples = max_num_samps;
         for (size_t n = 0; n < num_channels; n++) {
-            auto span = ringbufs[n]->get_producer_span(max_num_samps * sample_size);
+            auto span = ringbufs[n]->get_producer_span(max_num_samps);
             buf_ptrs[n] = (void *) span.data();
-            recv_max_samples = std::min(recv_max_samples, span.size_bytes() / sample_size);
+            recv_max_samples = std::min(recv_max_samples, span.size());
         }
 
         // receive packet for each channel from USRP
@@ -159,7 +166,7 @@ try {
 
         // process received samples
         for (size_t n = 0; n < num_channels; n++) {
-            ringbufs[n]->produce(samples * sample_size);
+            ringbufs[n]->produce(samples);
         }
     }
 

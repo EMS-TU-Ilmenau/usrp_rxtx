@@ -1,4 +1,9 @@
+#include <cstdlib>
+
 extern "C" {
+#ifdef _GNU_SOURCE
+    #include <pthread.h>
+#endif
     #include <sys/utsname.h>
     #include <unistd.h>
 }
@@ -259,7 +264,7 @@ void Log::UhdRxMetadata::serialize(std::ostream& console, std::ostream& logfile)
         { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
         { "_type", "rx_metadata" },
-        { "error_code", rx_meta.strerror() },
+        { "error_code", error_code },
         { "out_of_sequence", rx_meta.out_of_sequence },
         { "start_of_burst", rx_meta.start_of_burst },
         { "end_of_burst", rx_meta.end_of_burst },
@@ -409,6 +414,17 @@ void Log::UsrpHardware::serialize(std::ostream& console, std::ostream& logfile) 
 
 Logger::Logger(const std::filesystem::path& path_prefix, Json::Object&& config)
 {
+    // UHD has a special logging fastpath for urgent log messages that bypass
+    // the regular logging settings. it is used for logging the UOSDL letters
+    // that indicate stream errors. these however clobbers our Logger's output.
+    // as Logger already logs these stream errors, disable UHD's fastpath.
+    // https://kb.ettus.com/The_UHD_logging_facility
+    // https://files.ettus.com/manual/page_general.html#general_ounotes
+    // https://files.ettus.com/manual/page_usrp_x3x0_config.html#x3x0cfg_hosthw_troubleshooting
+#if _POSIX_C_SOURCE >= 200112L
+    setenv("UHD_LOG_FASTPATH_DISABLE", "ON", 1);
+#endif
+
     // get hostname
     char hostname[256];
     if (gethostname(hostname, sizeof(hostname)) != 0)

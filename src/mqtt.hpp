@@ -42,11 +42,11 @@ public:
     MqttClient(const MqttClient&) = delete;
     MqttClient& operator=(const MqttClient&) = delete;
 
-    inline bool is_running()
+    auto is_running() -> bool
     { return run.load(std::memory_order_relaxed); }
 
 private:
-    volatile std::atomic<bool> run;
+    std::atomic<bool> run {true};
     std::thread worker_handle;
 
     Logger::sptr logger;

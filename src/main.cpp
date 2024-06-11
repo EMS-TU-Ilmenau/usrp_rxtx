@@ -4,13 +4,13 @@
 #include <iostream>
 #include <string>
 
-#include <uhd/version.hpp>
-#include <uhd/usrp/multi_usrp.hpp>
-#include <uhd/utils/log_add.hpp>
-
 extern "C" {
     #include <sched.h>
 }
+
+#include <uhd/version.hpp>
+#include <uhd/usrp/multi_usrp.hpp>
+#include <uhd/utils/log_add.hpp>
 
 #include "config.hpp"
 #include "error.hpp"
@@ -23,19 +23,6 @@ extern "C" {
 #if UHD_VERSION < 4030000
     #warning compatibility with UHD versions < 4.3.0 is not verified
 #endif
-
-// global Logger::sptr required by log_uhd and exception handlers
-static Logger::sptr logger;
-
-// global function enqueueing UHD log messages into our Logger
-static void log_uhd(const uhd::log::logging_info& uhd_logging_info)
-{
-    if (logger) {;
-        logger->log_uhd(uhd_logging_info);
-    } else {
-        return;
-    }
-}
 
 int main(int argc, char *argv[])
 try {
@@ -58,11 +45,15 @@ try {
         throw syscall_error{"pthread_sigmask() failed", ret};
 
     // spawn Logger
-    logger = std::make_shared<Logger>("usrp_rxtx", std::move(cfg.to_json()));
+    Logger::sptr logger = std::make_shared<Logger>("usrp_rxtx", std::move(cfg.to_json()));
     logger->log("Initializing ...", Log::INFO);
 
     // set up UHD logging
-    uhd::log::add_logger("usrp_rxtx", log_uhd);
+    uhd::log::add_logger("usrp_rxtx",
+        [logger](const uhd::log::logging_info& uhd_logging_info) {
+            logger->log_uhd(uhd_logging_info);
+        }
+    );
     uhd::log::set_console_level(uhd::log::off);
 
     // logger can handle all exceptions from now on
@@ -84,6 +75,7 @@ try {
             throw syscall_error{"error writing to /dev/cpu_dma_latency"};
         // keep file open until process terminates
 
+        // store current scheduler settings before changing it below
         int oldsched = sched_getscheduler(0);
         if (oldsched == -1)
             throw syscall_error{"sched_getscheduler() failed"};
@@ -93,9 +85,10 @@ try {
 
         // as of UHD version 4.6.0, creating a uhd::usrp::multi_usrp instance
         // spawns multiple threads. with an X310 these include `uhd_ctrl_ep0001`,
-        // which handle time-critical network communication. therefore, elevate
+        // which handles time-critical network communication. therefore, elevate
         // the main thread/process to real-time priority before instantiating
-        // multi_usrp, so its threads will inherit the priority.
+        // multi_usrp, so threads spawned by uhd::usrp::multi_usrp::make will
+        // inherit real-time scheduling.
         const struct sched_param param = {
             .sched_priority = 99
         };
@@ -105,7 +98,7 @@ try {
         // connect to USRP
         uhd::usrp::multi_usrp::sptr usrp = uhd::usrp::multi_usrp::make(cfg.usrp.args);
 
-        // return to original scheduler settings. the remaining threads are under
+        // restore original scheduler settings. the remaining threads are under
         // our control and will set their own priority autonomously.
         if (sched_setscheduler(0, oldsched, &oldparam) == -1)
             throw syscall_error{"sched_setscheduler() failed"};
@@ -170,7 +163,6 @@ try {
     }
 
     logger->log_exit(exit_code);
-    //std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     return exit_code;
 } catch (const std::exception& e) {
     std::cerr << "Exception: " << e.what() << '\n'

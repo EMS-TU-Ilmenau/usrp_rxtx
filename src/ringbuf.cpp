@@ -52,20 +52,3 @@ ShmMmap::~ShmMmap()
     close(fd);
     unlink(path.c_str());
 }
-
-Ringbuf::Ringbuf(const std::filesystem::path& desc_path, size_t desc_size,
-                 const std::filesystem::path& ring_path, size_t ring_size)
-    : shm_desc(desc_path, desc_size)
-    , shm_ring(ring_path, ring_size)
-{
-    desc = (struct ringbuf *) shm_desc.addr;
-
-    _mask = ring_size - 1;
-    _size = ring_size;
-
-    // zero-initialize descriptor
-    desc->start_nsec = 0;
-    desc->sample_rate_hz = 0.;
-    desc->head = 0;
-    desc->clob = 0;
-}

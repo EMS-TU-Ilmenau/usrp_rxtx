@@ -15,11 +15,16 @@
 class Rx {
 public:
     using sptr = std::shared_ptr<Rx>;
+    using sample_t = std::complex<std::int16_t>;
 
     Rx(uhd::usrp::multi_usrp::sptr usrp, Logger::sptr logger, const Config& cfg);
     ~Rx();
 
-    auto get_ringbufs() const -> std::vector<Ringbuf::sptr>
+    // delete copy constructor and copy assignment operator
+    Rx(const Rx&) = delete;
+    Rx& operator=(const Rx&) = delete;
+
+    auto get_ringbufs() const -> std::vector<Ringbuf<sample_t>::sptr>
     { return ringbufs; }
 
     auto is_running() const -> bool
@@ -33,7 +38,7 @@ private:
     uhd::usrp::multi_usrp::sptr usrp;
     Logger::sptr logger;
 
-    std::vector<Ringbuf::sptr> ringbufs;
+    std::vector<Ringbuf<sample_t>::sptr> ringbufs;
 
     void worker();
 };

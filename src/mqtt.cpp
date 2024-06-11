@@ -1,3 +1,9 @@
+extern "C" {
+#ifdef _GNU_SOURCE
+    #include <pthread.h>
+#endif
+}
+
 #include "mqtt.hpp"
 
 MqttClient::MqttClient(Logger::sptr logger)
@@ -25,7 +31,6 @@ MqttClient::MqttClient(Logger::sptr logger)
     this->logger = logger;
 
     // spawn worker
-    run = true;
     worker_handle = std::thread{&MqttClient::worker, this};
 }
 

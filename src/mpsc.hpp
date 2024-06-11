@@ -17,7 +17,7 @@ class mpsc {
 
 public:
     constexpr auto size() -> std::size_t
-        { return N; }
+    { return N; }
 
     auto push(T&& obj) -> std::size_t
     {

@@ -26,10 +26,10 @@ struct ringbuf {
     /// producer sample rate in Hz
     double sample_rate_hz;
 
-    /// producer head offset in bytes
+    /// producer head offset in samples
     volatile atomic_uint64_t head;
 
-    /// producer clobber offset in bytes
+    /// producer clobber offset in samples
     volatile atomic_uint64_t clob;
 };
 
