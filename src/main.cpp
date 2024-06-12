@@ -18,6 +18,7 @@ extern "C" {
 #include "mqtt.hpp"
 #include "ringbuf.hpp"
 #include "rx.hpp"
+#include "tx.hpp"
 
 // warn about unsupported UHD versions
 #if UHD_VERSION < 4030000
@@ -40,12 +41,15 @@ try {
     sigaddset(&set, SIGHUP);
     sigaddset(&set, SIGINT);
     sigaddset(&set, SIGTERM);
+    sigaddset(&set, SIGUSR1);
+    sigaddset(&set, SIGUSR2);
     int ret = pthread_sigmask(SIG_BLOCK, &set, nullptr);
     if (ret != 0)
         throw syscall_error{"pthread_sigmask() failed", ret};
 
     // spawn Logger
-    Logger::sptr logger = std::make_shared<Logger>("usrp_rxtx", std::move(cfg.to_json()));
+    Logger::sptr logger = std::make_shared<Logger>(
+        "usrp_rxtx_" + cfg.usrp.args, std::move(cfg.to_json()));
     logger->log("Initializing ...", Log::INFO);
 
     // set up UHD logging
@@ -104,17 +108,56 @@ try {
             throw syscall_error{"sched_setscheduler() failed"};
 
         // sample rate and channel selection
-        usrp->set_rx_rate(cfg.usrp.sample_rate);
-        usrp->set_tx_rate(cfg.usrp.sample_rate);
-        usrp->set_rx_subdev_spec(uhd::usrp::subdev_spec_t{cfg.rx.subdev});
-        usrp->set_tx_subdev_spec(uhd::usrp::subdev_spec_t{cfg.tx.subdev});
+        if (!cfg.rx.subdev.empty()) {
+            usrp->set_rx_subdev_spec(uhd::usrp::subdev_spec_t{cfg.rx.subdev});
+            usrp->set_rx_rate(cfg.rx.rate);
+            usrp->set_rx_gain(cfg.rx.gain);
+
+            // prepare tune request
+            uhd::tune_request_t tune_req(cfg.rx.freq_rf);
+            tune_req.args["mode_n"] = "integer";
+            tune_req.target_freq = cfg.rx.freq_rf;
+            tune_req.rf_freq = cfg.rx.freq_rf;
+            tune_req.dsp_freq = cfg.rx.freq_dsp;
+            tune_req.rf_freq_policy  = uhd::tune_request_t::POLICY_MANUAL;
+            tune_req.dsp_freq_policy = uhd::tune_request_t::POLICY_MANUAL;
+
+            for (size_t ch = 0; ch < usrp->get_rx_num_channels(); ch++) {
+                uhd::tune_result_t tune_res = usrp->set_rx_freq(tune_req, ch);
+                logger->log(tune_res.to_pp_string(), Log::DEBUG);
+            }
+        }
+        if (!cfg.tx.subdev.empty()) {
+            usrp->set_tx_subdev_spec(uhd::usrp::subdev_spec_t{cfg.tx.subdev});
+            usrp->set_tx_rate(cfg.tx.rate);
+            usrp->set_tx_gain(cfg.tx.gain);
+
+            // prepare tune request
+            uhd::tune_request_t tune_req(cfg.tx.freq_rf);
+            tune_req.args["mode_n"] = "integer";
+            tune_req.target_freq = cfg.tx.freq_rf;
+            tune_req.rf_freq = cfg.tx.freq_rf;
+            tune_req.dsp_freq = cfg.tx.freq_dsp;
+            tune_req.rf_freq_policy  = uhd::tune_request_t::POLICY_MANUAL;
+            tune_req.dsp_freq_policy = uhd::tune_request_t::POLICY_MANUAL;
+
+            for (size_t ch = 0; ch < usrp->get_tx_num_channels(); ch++) {
+                uhd::tune_result_t tune_res = usrp->set_tx_freq(tune_req, ch);
+                logger->log(tune_res.to_pp_string(), Log::DEBUG);
+            }
+        }
 
         // log USRP hardware and channel configuration
         logger->log_usrp_hardware(usrp);
         logger->log_usrp_channels(usrp);
 
         // NOTE: allocate 2M hugepages via `echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages`
-        Rx rx {usrp, logger, cfg};
+        Rx::sptr rx;
+        if (!cfg.rx.subdev.empty())
+            rx = std::make_shared<Rx>(usrp, logger, cfg);
+        Tx::sptr tx;
+        if (!cfg.tx.subdev.empty())
+            tx = std::make_shared<Tx>(usrp, logger, cfg);
 
         logger->log("Initialization succeeded.");
 
@@ -129,6 +172,11 @@ try {
             } else if (ret == SIGINT || ret == SIGTERM) {
                 logger->log("Received SIGINT or SIGTERM. Exiting gracefully.");
                 break;
+            } else if (ret == SIGUSR1) {
+                logger->log("Received SIGUSR1. Doing absolutely nothing.");
+            } else if (ret == SIGUSR2) {
+                logger->log("Received SIGUSR2. Toggling Tx muting.");
+                tx->toggle_mute();
             }
 
             // first verify that logger is still running
@@ -146,8 +194,15 @@ try {
                 break;
             }
 
-            if (!rx.is_running()) {
-                logger->log("Rx thread stopped unexpectedly. Terminating.",
+            if (rx && !rx->is_running()) {
+                logger->log("Tx thread stopped unexpectedly. Terminating.",
+                            Log::FATAL);
+                exit_code = 1;
+                break;
+            }
+
+            if (tx && !tx->is_running()) {
+                logger->log("Tx thread stopped unexpectedly. Terminating.",
                             Log::FATAL);
                 exit_code = 1;
                 break;

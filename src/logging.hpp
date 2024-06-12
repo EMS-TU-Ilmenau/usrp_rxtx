@@ -37,7 +37,7 @@ namespace Log {
         auto to_string_color() const -> const std::string;
 
         /// return error level formatted as right aligned std::string with ANSI color escapes
-        auto to_string_ralign_color() const -> const std::string;
+        auto to_string_color_fixed() const -> const std::string;
 
     protected:
         uhd::log::severity_level level;
@@ -121,6 +121,20 @@ namespace Log {
         uhd::log::logging_info info;
     };
 
+    class UhdAsyncMetadata : public Base {
+    public:
+        UhdAsyncMetadata(const uhd::async_metadata_t& async_meta)
+            : Base{async_meta.event_code == uhd::async_metadata_t::EVENT_CODE_BURST_ACK ||
+                   async_meta.event_code == uhd::async_metadata_t::EVENT_CODE_USER_PAYLOAD
+                   ? DEBUG : ERROR}
+            , async_meta{async_meta}
+        {};
+        void serialize(std::ostream& console, std::ostream& logfile) const;
+
+    protected:
+        uhd::async_metadata_t async_meta;
+    };
+
     class UhdRxMetadata : public Base {
     public:
         UhdRxMetadata(const uhd::rx_metadata_t& rx_meta)
@@ -143,6 +157,18 @@ namespace Log {
 
     protected:
         uhd::stream_cmd_t stream_cmd;
+    };
+
+    class UhdTxMetadata : public Base {
+    public:
+        UhdTxMetadata(const uhd::tx_metadata_t& tx_meta)
+            : Base{DEBUG}
+            , tx_meta{tx_meta}
+        {};
+        void serialize(std::ostream& console, std::ostream& logfile) const;
+
+    protected:
+        uhd::tx_metadata_t tx_meta;
     };
 
     class UsrpHardware : public Base {
@@ -219,6 +245,12 @@ public:
         cond_var.notify_one();
     };
 
+    void log_uhd_async_metadata(const uhd::async_metadata_t& async_meta)
+    {
+        queue.push(Log::UhdAsyncMetadata{async_meta});
+        cond_var.notify_one();
+    };
+
     void log_uhd_rx_metadata(const uhd::rx_metadata_t& rx_meta)
     {
         queue.push(Log::UhdRxMetadata{rx_meta});
@@ -228,6 +260,12 @@ public:
     void log_uhd_stream_cmd(const uhd::stream_cmd_t& stream_cmd)
     {
         queue.push(Log::UhdStreamCmd{stream_cmd});
+        cond_var.notify_one();
+    };
+
+    void log_uhd_tx_metadata(const uhd::tx_metadata_t& tx_meta)
+    {
+        queue.push(Log::UhdTxMetadata{tx_meta});
         cond_var.notify_one();
     };
 
@@ -252,8 +290,10 @@ private:
                       Log::Exception,
                       Log::Exit,
                       Log::UhdLogInfo,
+                      Log::UhdAsyncMetadata,
                       Log::UhdRxMetadata,
                       Log::UhdStreamCmd,
+                      Log::UhdTxMetadata,
                       Log::UsrpChannels,
                       Log::UsrpHardware
                      >, 1024> queue;

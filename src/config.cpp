@@ -121,15 +121,21 @@ void Config::parse(std::istream& istream)
 
     // copy variant values to static type structs
     usrp.args = std::get<std::string>(map["usrp"]["args"]);
-    usrp.sample_rate = std::get<double>(map["usrp"]["sample_rate"]);
     cpu.max_latency_usec = (int32_t) std::get<int64_t>(map["cpu"]["max_latency_usec"]);
     shmem.mount_desc = std::get<std::string>(map["shmem"]["mount_desc"]);
     shmem.mount_ring = std::get<std::string>(map["shmem"]["mount_ring"]);
     shmem.size_desc_mib = (std::size_t) std::get<int64_t>(map["shmem"]["size_desc_mib"]);
     shmem.size_ring_mib = (std::size_t) std::get<int64_t>(map["shmem"]["size_ring_mib"]);
     rx.subdev = std::get<std::string>(map["rx"]["subdev"]);
+    rx.rate = std::get<double>(map["rx"]["rate"]);
+    rx.freq_rf = std::get<double>(map["rx"]["freq_rf"]);
+    tx.freq_dsp = std::get<double>(map["rx"]["freq_dsp"]);
     rx.gain = std::get<double>(map["rx"]["gain"]);
     tx.subdev = std::get<std::string>(map["tx"]["subdev"]);
+    tx.file = std::get<std::string>(map["tx"]["file"]);
+    tx.rate = std::get<double>(map["tx"]["rate"]);
+    tx.freq_rf = std::get<double>(map["tx"]["freq_rf"]);
+    tx.freq_dsp = std::get<double>(map["tx"]["freq_dsp"]);
     tx.gain = std::get<double>(map["tx"]["gain"]);
 }
 

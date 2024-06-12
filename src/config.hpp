@@ -15,7 +15,6 @@ public:
 
     struct {
         std::string args;
-        double sample_rate;
     } usrp;
     struct {
         int32_t max_latency_usec;
@@ -28,10 +27,17 @@ public:
     } shmem;
     struct {
         std::string subdev;
+        double rate;
+        double freq_rf;
+        double freq_dsp;
         double gain;
     } rx;
     struct {
         std::string subdev;
+        std::string file;
+        double rate;
+        double freq_rf;
+        double freq_dsp;
         double gain;
     } tx;
 
@@ -47,7 +53,6 @@ private:
     std::map<std::string, std::map<std::string, value_t>> map = {
         { "usrp", {
             { "args", "" },
-            { "sample_rate", 0. }
         }},
         { "cpu", {
             { "max_latency_usec", 100 }
@@ -60,10 +65,17 @@ private:
         }},
         { "rx", {
             { "subdev", "" },
+            { "rate", 0. },
+            { "freq_rf", 0. },
+            { "freq_dsp", 0. },
             { "gain", 0. }
         }},
         { "tx", {
             { "subdev", "" },
+            { "file", "" },
+            { "rate", 0. },
+            { "freq_rf", 0. },
+            { "freq_dsp", 0. },
             { "gain", 0. }
         }}
     };

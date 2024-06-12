@@ -59,8 +59,8 @@ auto Log::Level::to_string_color() const -> const std::string
     }
 }
 
-/// return error level formatted as right aligned std::string with ANSI color escapes
-auto Log::Level::to_string_ralign_color() const -> const std::string
+/// return error level formatted as fixed width std::string with ANSI color escapes
+auto Log::Level::to_string_color_fixed() const -> const std::string
 {
     switch (level) {
     case uhd::log::trace:
@@ -68,9 +68,9 @@ auto Log::Level::to_string_ralign_color() const -> const std::string
     case uhd::log::debug:
         return "\x1b[90mDEBUG\x1b[0m";
     case uhd::log::info:
-        return " \x1b[92mINFO\x1b[0m";
+        return "\x1b[92mINFO\x1b[0m ";
     case uhd::log::warning:
-        return " \x1b[93mWARN\x1b[0m";
+        return "\x1b[93mWARN\x1b[0m ";
     case uhd::log::error:
         return "\x1b[91mERROR\x1b[0m";
     case uhd::log::fatal:
@@ -109,7 +109,7 @@ auto Log::Base::time_short() const -> std::string
 {
     auto days = std::chrono::floor<std::chrono::days>(time_point);
     std::chrono::hh_mm_ss time {
-        std::chrono::floor<std::chrono::milliseconds>(time_point - days)
+        std::chrono::floor<std::chrono::microseconds>(time_point - days)
     };
 
     std::ostringstream buf;
@@ -117,7 +117,7 @@ auto Log::Base::time_short() const -> std::string
         << std::setw(2) << time.hours().count()                << ':'
         << std::setw(2) << time.minutes().count()              << ':'
         << std::setw(2) << time.seconds().count()              << '.'
-        << std::setw(3) << time.subseconds().count()           << 'Z';
+        << std::setw(6) << time.subseconds().count()           << 'Z';
 
     return buf.str();
 }
@@ -138,7 +138,7 @@ void Log::Null::serialize(std::ostream& console, std::ostream& logfile) const
 void Log::Misc::serialize(std::ostream& console, std::ostream& logfile) const
 {
     console << time_short() << ' '
-            << std::right << std::setw(5) << level.to_string_ralign_color() << ": "
+            << std::right << std::setw(5) << level.to_string_color_fixed() << ": "
             << msg << std::endl;
 
     Json::Object{{
@@ -164,7 +164,7 @@ void Log::Exception::serialize(std::ostream& console, std::ostream& logfile) con
     }
 
     console << time_short() << ' '
-            << std::right << std::setw(5) << level.to_string_ralign_color()
+            << std::right << std::setw(5) << level.to_string_color_fixed()
             << ": Exception: " << what << std::endl;
 
     Json::Object{{
@@ -180,7 +180,7 @@ void Log::Exception::serialize(std::ostream& console, std::ostream& logfile) con
 void Log::Exit::serialize(std::ostream& console, std::ostream& logfile) const
 {
     console << time_short() << ' '
-            << std::right << std::setw(5) << level.to_string_ralign_color()
+            << std::right << std::setw(5) << level.to_string_color_fixed()
             << (exit_code == 0
                     ? ": Exiting successfully with exit code "
                     : ": Exiting abnormally with exit code ")
@@ -200,7 +200,7 @@ void Log::UhdLogInfo::serialize(std::ostream& console, std::ostream& logfile) co
 {
     if (info.verbosity >= uhd::log::info) {
         console << time_short() << ' '
-                << std::right << std::setw(5) << level.to_string_ralign_color()
+                << std::right << std::setw(5) << level.to_string_color_fixed()
                 << ": UHD/" << info.component << ": "
                 << info.message << std::endl;
     }
@@ -212,6 +212,68 @@ void Log::UhdLogInfo::serialize(std::ostream& console, std::ostream& logfile) co
         { "_type", "uhd" },
         { "component", info.component },
         { "message", info.message }
+    }}.dump(&logfile);
+    logfile << '\n';
+}
+
+void Log::UhdAsyncMetadata::serialize(std::ostream& console, std::ostream& logfile) const
+{
+    Json::json_t event_code;
+    switch (async_meta.event_code) {
+    case uhd::async_metadata_t::EVENT_CODE_BURST_ACK:
+        event_code = "EVENT_CODE_BURST_ACK";
+        break;
+    case uhd::async_metadata_t::EVENT_CODE_USER_PAYLOAD:
+        event_code = "EVENT_CODE_USER_PAYLOAD";
+        break;
+    case uhd::async_metadata_t::EVENT_CODE_SEQ_ERROR:
+        event_code = "EVENT_CODE_SEQ_ERROR";
+        break;
+    case uhd::async_metadata_t::EVENT_CODE_SEQ_ERROR_IN_BURST:
+        event_code = "EVENT_CODE_SEQ_ERROR_IN_BURST";
+        break;
+    case uhd::async_metadata_t::EVENT_CODE_TIME_ERROR:
+        event_code = "EVENT_CODE_TIME_ERROR";
+        break;
+    case uhd::async_metadata_t::EVENT_CODE_UNDERFLOW:
+        event_code = "EVENT_CODE_UNDERFLOW";
+        break;
+    case uhd::async_metadata_t::EVENT_CODE_UNDERFLOW_IN_PACKET:
+        event_code = "EVENT_CODE_UNDERFLOW_IN_PACKET";
+        break;
+    default:
+        event_code = (uint64_t) async_meta.event_code;
+    }
+
+    Json::Object obj {{
+        { "event_code", event_code },
+        { "channel", (uint64_t) async_meta.channel },
+        { "has_time_spec", async_meta.has_time_spec },
+        { "time_spec", (uint64_t) (async_meta.time_spec.get_full_secs() * 1e9) +
+                       (uint64_t) (async_meta.time_spec.get_frac_secs() * 1e9) },
+        { "user_payload", Json::Array{{
+            (uint64_t) async_meta.user_payload[0], (uint64_t) async_meta.user_payload[1],
+            (uint64_t) async_meta.user_payload[2], (uint64_t) async_meta.user_payload[3]
+        }}}
+    }};
+
+    console << time_short() << ' '
+            << std::right << std::setw(5) << level.to_string_color_fixed()
+            << ": async_metadata_t: " << obj.dumps() << std::endl;
+
+    Json::Object{{
+        { "_time", std::move(time_rfc3339()) },
+        { "_time_ns", time_epoch_ns() },
+        { "_level", level.to_string() },
+        { "_type", "rx_metadata" },
+        { "event_code", event_code },
+        { "has_time_spec", async_meta.has_time_spec },
+        { "time_spec", (uint64_t) (async_meta.time_spec.get_full_secs() * 1e9) +
+                       (uint64_t) (async_meta.time_spec.get_frac_secs() * 1e9) },
+        { "user_payload", Json::Array{{
+            (uint64_t) async_meta.user_payload[0], (uint64_t) async_meta.user_payload[1],
+            (uint64_t) async_meta.user_payload[2], (uint64_t) async_meta.user_payload[3]
+        }}}
     }}.dump(&logfile);
     logfile << '\n';
 }
@@ -256,7 +318,7 @@ void Log::UhdRxMetadata::serialize(std::ostream& console, std::ostream& logfile)
     }};
 
     console << time_short() << ' '
-            << std::right << std::setw(5) << level.to_string_ralign_color()
+            << std::right << std::setw(5) << level.to_string_color_fixed()
             << ": rx_metadata_t: " << obj.dumps() << std::endl;
 
     Json::Object{{
@@ -305,7 +367,7 @@ void Log::UhdStreamCmd::serialize(std::ostream& console, std::ostream& logfile) 
     }};
 
     console << time_short() << ' '
-            << std::right << std::setw(5) << level.to_string_ralign_color()
+            << std::right << std::setw(5) << level.to_string_color_fixed()
             << ": stream_cmd_t: " << obj.dumps() << std::endl;
 
     Json::Object{{
@@ -318,6 +380,34 @@ void Log::UhdStreamCmd::serialize(std::ostream& console, std::ostream& logfile) 
         { "stream_now", stream_cmd.stream_now },
         { "time_spec", (uint64_t) (stream_cmd.time_spec.get_full_secs() * 1e9) +
                        (uint64_t) (stream_cmd.time_spec.get_frac_secs() * 1e9) }
+    }}.dump(&logfile);
+    logfile << '\n';
+}
+
+void Log::UhdTxMetadata::serialize(std::ostream& console, std::ostream& logfile) const
+{
+    Json::Object obj {{
+        { "start_of_burst", tx_meta.start_of_burst },
+        { "end_of_burst", tx_meta.end_of_burst },
+        { "has_time_spec", tx_meta.has_time_spec },
+        { "time_spec", (uint64_t) (tx_meta.time_spec.get_full_secs() * 1e9) +
+                       (uint64_t) (tx_meta.time_spec.get_frac_secs() * 1e9) }
+    }};
+
+    console << time_short() << ' '
+            << std::right << std::setw(5) << level.to_string_color_fixed()
+            << ": tx_metadata_t: " << obj.dumps() << std::endl;
+
+    Json::Object{{
+        { "_time", std::move(time_rfc3339()) },
+        { "_time_ns", time_epoch_ns() },
+        { "_level", level.to_string() },
+        { "_type", "rx_metadata" },
+        { "start_of_burst", tx_meta.start_of_burst },
+        { "end_of_burst", tx_meta.end_of_burst },
+        { "has_time_spec", tx_meta.has_time_spec },
+        { "time_spec", (uint64_t) (tx_meta.time_spec.get_full_secs() * 1e9) +
+                       (uint64_t) (tx_meta.time_spec.get_frac_secs() * 1e9) }
     }}.dump(&logfile);
     logfile << '\n';
 }
