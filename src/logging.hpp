@@ -109,6 +109,20 @@ namespace Log {
         int exit_code;
     };
 
+    class RxZeropad : public Base {
+    public:
+        RxZeropad(uint64_t offset, uint64_t samples)
+            : Base{offset == 0 ? DEBUG : WARN}
+            , offset{offset}
+            , samples{samples}
+        {};
+        void serialize(std::ostream& console, std::ostream& logfile) const;
+
+    protected:
+        uint64_t offset;
+        uint64_t samples;
+    };
+
     class UhdLogInfo : public Base {
     public:
         UhdLogInfo(const uhd::log::logging_info& info)
@@ -257,6 +271,12 @@ public:
         cond_var.notify_one();
     };
 
+    void log_rx_zeropad(uint64_t offset, uint64_t samples)
+    {
+        queue.push(Log::RxZeropad{offset, samples});
+        cond_var.notify_one();
+    };
+
     void log_uhd_stream_cmd(const uhd::stream_cmd_t& stream_cmd)
     {
         queue.push(Log::UhdStreamCmd{stream_cmd});
@@ -289,6 +309,7 @@ private:
                       Log::Misc,
                       Log::Exception,
                       Log::Exit,
+                      Log::RxZeropad,
                       Log::UhdLogInfo,
                       Log::UhdAsyncMetadata,
                       Log::UhdRxMetadata,

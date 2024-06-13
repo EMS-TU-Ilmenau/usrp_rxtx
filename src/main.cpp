@@ -167,7 +167,7 @@ try {
             // but ignore SIGHUP)
             const struct timespec timeout = { .tv_sec = 0, .tv_nsec = 100'000'000UL };
             int ret = sigtimedwait(&set, nullptr, &timeout);
-            if (ret == -1 && errno != EAGAIN) {
+            if (ret == -1 && errno != EAGAIN && errno != EINTR) {
                 throw syscall_error{"sigtimedwait() failed"};
             } else if (ret == SIGINT || ret == SIGTERM) {
                 logger->log("Received SIGINT or SIGTERM. Exiting gracefully.");
@@ -195,7 +195,7 @@ try {
             }
 
             if (rx && !rx->is_running()) {
-                logger->log("Tx thread stopped unexpectedly. Terminating.",
+                logger->log("Rx thread stopped unexpectedly. Terminating.",
                             Log::FATAL);
                 exit_code = 1;
                 break;

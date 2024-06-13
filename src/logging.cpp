@@ -196,6 +196,25 @@ void Log::Exit::serialize(std::ostream& console, std::ostream& logfile) const
     logfile << '\n';
 }
 
+void Log::RxZeropad::serialize(std::ostream& console, std::ostream& logfile) const
+{
+    console << time_short() << ' '
+            << std::right << std::setw(5) << level.to_string_color_fixed()
+            << ": Zero padding " << samples
+            << " samples at ring buffer offset " << offset << " samples."
+            << std::endl;
+
+    Json::Object{{
+        { "_time", std::move(time_rfc3339()) },
+        { "_time_ns", time_epoch_ns() },
+        { "_level", level.to_string() },
+        { "_type", "rx_zeropad" },
+        { "offset", offset },
+        { "samples", samples }
+    }}.dump(&logfile);
+    logfile << '\n';
+}
+
 void Log::UhdLogInfo::serialize(std::ostream& console, std::ostream& logfile) const
 {
     if (info.verbosity >= uhd::log::info) {
@@ -418,8 +437,7 @@ void Log::UsrpChannels::serialize(std::ostream& console, std::ostream& logfile) 
     (void) console;
 
     Json::Array chans_rx;
-    int num_chan_rx = usrp->get_rx_num_channels();
-    for (int chan = 0; chan < num_chan_rx; chan++) {
+    for (size_t chan = 0; chan < usrp->get_rx_num_channels(); chan++) {
         chans_rx.emplace_back(Json::Object {{
             { "rate", usrp->get_rx_rate(chan) },
             { "gain", usrp->get_rx_gain(chan) }
@@ -427,11 +445,10 @@ void Log::UsrpChannels::serialize(std::ostream& console, std::ostream& logfile) 
     }
 
     Json::Array chans_tx;
-    int num_chan_tx = usrp->get_tx_num_channels();
-    for (int chan = 0; chan < num_chan_tx; chan++) {
+    for (size_t chan = 0; chan < usrp->get_tx_num_channels(); chan++) {
         chans_tx.emplace_back(Json::Object {{
-            { "rate", usrp->get_rx_rate(chan) },
-            { "gain", usrp->get_rx_gain(chan) }
+            { "rate", usrp->get_tx_rate(chan) },
+            { "gain", usrp->get_tx_gain(chan) }
         }});
     }
 

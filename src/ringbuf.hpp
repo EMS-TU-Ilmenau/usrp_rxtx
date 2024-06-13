@@ -53,6 +53,9 @@ public:
     Ringbuf(const Ringbuf&) = delete;
     Ringbuf& operator=(const Ringbuf&) = delete;
 
+    auto get_head(std::memory_order m = std::memory_order_relaxed) const -> uint64_t
+    { return desc->head.load(m); }
+
     auto get_start_nsec() const -> uint64_t
     { return desc->start_nsec; }
 

@@ -129,7 +129,7 @@ void Config::parse(std::istream& istream)
     rx.subdev = std::get<std::string>(map["rx"]["subdev"]);
     rx.rate = std::get<double>(map["rx"]["rate"]);
     rx.freq_rf = std::get<double>(map["rx"]["freq_rf"]);
-    tx.freq_dsp = std::get<double>(map["rx"]["freq_dsp"]);
+    rx.freq_dsp = std::get<double>(map["rx"]["freq_dsp"]);
     rx.gain = std::get<double>(map["rx"]["gain"]);
     tx.subdev = std::get<std::string>(map["tx"]["subdev"]);
     tx.file = std::get<std::string>(map["tx"]["file"]);
