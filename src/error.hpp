@@ -37,6 +37,20 @@ public:
     }
 };
 
+class generic_error : public error {
+public:
+    generic_error(const std::string& message,
+                  const std::source_location location
+                      = std::source_location::current())
+    {
+        std::stringstream buf;
+        buf << "generic_error: "
+            << location.file_name() << ':' << location.line() << ": "
+            << message << ": " << message;
+        what_str = std::move(buf.str());
+    }
+};
+
 class not_implemented_error : public error {
 public:
     not_implemented_error(const std::string& message,

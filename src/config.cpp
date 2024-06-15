@@ -121,6 +121,7 @@ void Config::parse(std::istream& istream)
 
     // copy variant values to static type structs
     usrp.args = std::get<std::string>(map["usrp"]["args"]);
+    usrp.sync = std::get<std::string>(map["usrp"]["sync"]);
     cpu.max_latency_usec = (int32_t) std::get<int64_t>(map["cpu"]["max_latency_usec"]);
     shmem.mount_desc = std::get<std::string>(map["shmem"]["mount_desc"]);
     shmem.mount_ring = std::get<std::string>(map["shmem"]["mount_ring"]);

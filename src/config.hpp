@@ -15,6 +15,7 @@ public:
 
     struct {
         std::string args;
+        std::string sync;
     } usrp;
     struct {
         int32_t max_latency_usec;
@@ -53,6 +54,7 @@ private:
     std::map<std::string, std::map<std::string, value_t>> map = {
         { "usrp", {
             { "args", "" },
+            { "sync", "" }
         }},
         { "cpu", {
             { "max_latency_usec", 100 }

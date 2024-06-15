@@ -18,6 +18,7 @@ extern "C" {
 #include "mqtt.hpp"
 #include "ringbuf.hpp"
 #include "rx.hpp"
+#include "sync.hpp"
 #include "tx.hpp"
 
 // warn about unsupported UHD versions
@@ -107,14 +108,38 @@ try {
         if (sched_setscheduler(0, oldsched, &oldparam) == -1)
             throw syscall_error{"sched_setscheduler() failed"};
 
-        // sample rate and channel selection
+        // select subdevice and sample rate first
+        // NOTE: setting sample rate may change master clock rate (e.g., on B205)
         if (!cfg.rx.subdev.empty()) {
             usrp->set_rx_subdev_spec(uhd::usrp::subdev_spec_t{cfg.rx.subdev});
             usrp->set_rx_rate(cfg.rx.rate);
-            usrp->set_rx_gain(cfg.rx.gain);
+        }
+        if (!cfg.tx.subdev.empty()) {
+            usrp->set_tx_subdev_spec(uhd::usrp::subdev_spec_t{cfg.tx.subdev});
+            usrp->set_tx_rate(cfg.tx.rate);
+        }
 
+        // synchronize **after** setting the master clock rate (MCR) as any
+        // change to MCR will cause jump in device time
+        Sync sync {usrp, logger, cfg};
+        if (cfg.usrp.sync == "10mhz") {
+            sync.sync_10mhz();
+        } else if (cfg.usrp.sync == "1pps") {
+            sync.sync_1pps();
+        } else if (cfg.usrp.sync == "10mhz+1pps") {
+            sync.sync_10mhz();
+            sync.sync_1pps();
+        } else if (!cfg.usrp.sync.empty()) {
+            throw generic_error{"unknown usrp.sync setting: " + cfg.usrp.sync};
+        }
+
+        // tune Rx and Tx frontends
+        // TODO: implement synchronous tuning
+        // https://files.ettus.com/manual/page_sync.html#sync_phase
+        // https://files.ettus.com/manual/page_usrp_x3x0.html#x3x0_misc_timed_cmds_lockup
+        if (!cfg.rx.subdev.empty()) {
             // prepare tune request
-            uhd::tune_request_t tune_req(cfg.rx.freq_rf);
+            uhd::tune_request_t tune_req {cfg.rx.freq_rf};
             tune_req.args["mode_n"] = "integer";
             tune_req.target_freq = cfg.rx.freq_rf;
             tune_req.rf_freq = cfg.rx.freq_rf;
@@ -126,14 +151,16 @@ try {
                 uhd::tune_result_t tune_res = usrp->set_rx_freq(tune_req, ch);
                 logger->log(tune_res.to_pp_string(), Log::DEBUG);
             }
+
+            // wait for all local oscillators to lock
+            for (size_t ch = 0; ch < usrp->get_rx_num_channels(); ch++) {
+                while (!usrp->get_rx_sensor("lo_locked", ch).to_bool())
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
         }
         if (!cfg.tx.subdev.empty()) {
-            usrp->set_tx_subdev_spec(uhd::usrp::subdev_spec_t{cfg.tx.subdev});
-            usrp->set_tx_rate(cfg.tx.rate);
-            usrp->set_tx_gain(cfg.tx.gain);
-
             // prepare tune request
-            uhd::tune_request_t tune_req(cfg.tx.freq_rf);
+            uhd::tune_request_t tune_req {cfg.tx.freq_rf};
             tune_req.args["mode_n"] = "integer";
             tune_req.target_freq = cfg.tx.freq_rf;
             tune_req.rf_freq = cfg.tx.freq_rf;
@@ -145,12 +172,28 @@ try {
                 uhd::tune_result_t tune_res = usrp->set_tx_freq(tune_req, ch);
                 logger->log(tune_res.to_pp_string(), Log::DEBUG);
             }
+
+            // wait for all local oscillators to lock
+            for (size_t ch = 0; ch < usrp->get_tx_num_channels(); ch++) {
+                while (!usrp->get_tx_sensor("lo_locked", ch).to_bool())
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+        }
+
+        // set gains after tuning to minimize emission of local oscillator
+        // leakage into bands off the the target RF frequency
+        if (!cfg.rx.subdev.empty()) {
+            usrp->set_rx_gain(cfg.rx.gain);
+        }
+        if (!cfg.tx.subdev.empty()) {
+            usrp->set_tx_gain(cfg.tx.gain);
         }
 
         // log USRP hardware and channel configuration
         logger->log_usrp_hardware(usrp);
         logger->log_usrp_channels(usrp);
 
+        // start Rx and Tx threads
         // NOTE: allocate 2M hugepages via `echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages`
         Rx::sptr rx;
         if (!cfg.rx.subdev.empty())
