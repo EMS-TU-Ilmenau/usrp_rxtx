@@ -138,6 +138,7 @@ void Config::parse(std::istream& istream)
     tx.freq_rf = std::get<double>(map["tx"]["freq_rf"]);
     tx.freq_dsp = std::get<double>(map["tx"]["freq_dsp"]);
     tx.gain = std::get<double>(map["tx"]["gain"]);
+    wr.directory = std::get<std::string>(map["wr"]["directory"]);
 }
 
 auto Config::to_json() const -> Json::Object

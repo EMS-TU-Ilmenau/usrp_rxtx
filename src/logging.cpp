@@ -519,6 +519,25 @@ void Log::UsrpHardware::serialize(std::ostream& console, std::ostream& logfile) 
     logfile << '\n';
 }
 
+void Log::WrOpen::serialize(std::ostream& console, std::ostream& logfile) const
+{
+    console << time_short() << ' '
+            << std::right << std::setw(5) << level.to_string_color_fixed()
+            << ": Writing file " << path.generic_string()
+            << " from ring buffer offset " << offset << " samples."
+            << std::endl;
+
+    Json::Object{{
+        { "_time", std::move(time_rfc3339()) },
+        { "_time_ns", time_epoch_ns() },
+        { "_level", level.to_string() },
+        { "_type", "wr_open" },
+        { "file", path.generic_string() },
+        { "offset", offset }
+    }}.dump(&logfile);
+    logfile << '\n';
+}
+
 Logger::Logger(const std::filesystem::path& path_prefix, Json::Object&& config)
 {
     // UHD has a special logging fastpath for urgent log messages that bypass

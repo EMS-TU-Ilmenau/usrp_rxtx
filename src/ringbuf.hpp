@@ -2,13 +2,20 @@
 #define RINGBUF_HPP
 
 #include <cassert>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <span>
 #include <string>
+#include <thread>
 
+#include "error.hpp"
 #include "ringbuf.h"
+
+#ifndef UNLIKELY
+#define UNLIKELY(x) __builtin_expect(x, 0)
+#endif
 
 class ShmMmap {
 public:
@@ -62,6 +69,46 @@ public:
     auto get_sample_rate_hz() const -> double
     { return desc->sample_rate_hz; }
 
+    auto get_clobber_distance(uint64_t tail) const -> int64_t
+    {
+        uint64_t clob = desc->clob.load(std::memory_order_relaxed);
+        return tail + _size - clob;
+    }
+
+    auto get_consumer_span(uint64_t tail, size_t size) const -> std::span<const volatile T>
+    {
+        T *data = (T *) shm_ring.addr + (tail & _mask);
+        uint64_t head = desc->head.load(std::memory_order_relaxed);
+
+        // return empty span if requested data was not yet fully produced
+        if (UNLIKELY(tail + size > head)) {
+            return {data, 0};
+        }
+
+        // return span, handling ring buffer wrapping
+        // TODO: throw exception instead of returning already clobbered data?
+        if ((tail & _mask) + size <= _size) {
+            // no wrapping
+            return {data, size};
+        } else {
+            // wrapping: clip size to end of ring buffer
+            size = _size - (tail & _mask);
+            assert((tail & _mask) + size <= _size);
+            return {data, size};
+        }
+    }
+
+    auto get_consumer_wait(uint64_t tail, size_t size) const -> uint64_t
+    {
+        uint64_t head = desc->head.load(std::memory_order_relaxed);
+        const double sleep_sec = (tail + size - head) / desc->sample_rate_hz;
+        if (sleep_sec <= 0) {
+            return 0;
+        } else {
+            return sleep_sec * 1e9;
+        }
+    }
+
     auto get_producer_span(size_t size) -> std::span<volatile T>
     {
         assert(desc->clob >= desc->head);
@@ -79,6 +126,24 @@ public:
             return {data, size};
         }
     };
+
+    auto get_tail(uint64_t tail_nsec) -> uint64_t
+    {
+        // unable to satisfy tail prior to start of buffer
+        if (UNLIKELY(tail_nsec < desc->start_nsec))
+            throw generic_error{"requested tail precedes start time of buffer"};
+
+        // convert tail from nanoseconds to samples
+        const uint64_t tail = std::round(
+            (tail_nsec - desc->start_nsec) * 1e-9 * desc->sample_rate_hz
+        );
+
+        // verify tail has not been clobbered by producer already
+        if (UNLIKELY(tail <= desc->clob.load(std::memory_order_relaxed)))
+            throw generic_error{"requested tail already clobbered"};
+
+        return tail;
+    }
 
     void produce(size_t size)
     {

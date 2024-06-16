@@ -20,6 +20,7 @@ extern "C" {
 #include "rx.hpp"
 #include "sync.hpp"
 #include "tx.hpp"
+#include "wr.hpp"
 
 // warn about unsupported UHD versions
 #if UHD_VERSION < 4030000
@@ -202,6 +203,10 @@ try {
         if (!cfg.tx.subdev.empty())
             tx = std::make_shared<Tx>(usrp, logger, cfg);
 
+        // prepare file writing
+        Wr::sptr wr;
+        std::filesystem::path wr_dir = cfg.wr.directory;
+
         logger->log("Initialization succeeded.");
 
         // run until interrupted
@@ -216,7 +221,16 @@ try {
                 logger->log("Received SIGINT or SIGTERM. Exiting gracefully.");
                 break;
             } else if (ret == SIGUSR1) {
-                logger->log("Received SIGUSR1. Doing absolutely nothing.");
+                logger->log("Received SIGUSR1. Toggling file writing.");
+                if (wr) {
+                    wr.reset();
+                } else {
+                    wr = std::make_shared<Wr>(
+                        rx->get_ringbufs(), logger,
+                        wr_dir / ("rx_" + cfg.usrp.args),
+                        (usrp->get_time_now().get_full_secs() + 1) * 1'000'000'000UL
+                    );
+                }
             } else if (ret == SIGUSR2) {
                 logger->log("Received SIGUSR2. Toggling Tx muting.");
                 tx->toggle_mute();
@@ -249,6 +263,11 @@ try {
                             Log::FATAL);
                 exit_code = 1;
                 break;
+            }
+
+            if (wr && !wr->is_running()) {
+                logger->log("Wr thread stopped unexpectedly. File writing failed.",
+                            Log::ERROR);
             }
         }
     } catch (const std::exception& e) {

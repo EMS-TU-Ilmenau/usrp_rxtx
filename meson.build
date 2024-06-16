@@ -30,6 +30,7 @@ usrp_rxtx = executable('usrp_rxtx',
         'src/ringbuf.cpp',
         'src/rx.cpp',
         'src/tx.cpp',
+        'src/wr.cpp',
     dependencies : [dep_rt, dep_thread, dep_uhd, dep_libmosquitto]
 )
 

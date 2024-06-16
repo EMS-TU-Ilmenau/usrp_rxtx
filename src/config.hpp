@@ -41,6 +41,9 @@ public:
         double freq_dsp;
         double gain;
     } tx;
+    struct {
+        std::string directory;
+    } wr;
 
     /// convert config to Json::Object for logging config values
     auto to_json() const -> Json::Object;
@@ -79,6 +82,9 @@ private:
             { "freq_rf", 0. },
             { "freq_dsp", 0. },
             { "gain", 0. }
+        }},
+        { "wr", {
+            { "directory", "" },
         }}
     };
 

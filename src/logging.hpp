@@ -208,6 +208,20 @@ namespace Log {
     protected:
         uhd::usrp::multi_usrp::sptr usrp;
     };
+
+    class WrOpen : public Base {
+    public:
+        WrOpen(const std::filesystem::path& path, const uint64_t offset)
+            : Base{INFO}
+            , path{path}
+            , offset{offset}
+        {};
+        void serialize(std::ostream& console, std::ostream& logfile) const;
+
+    protected:
+        std::filesystem::path path;
+        uint64_t offset;
+    };
 }
 
 class Logger {
@@ -289,6 +303,12 @@ public:
         cond_var.notify_one();
     };
 
+    void log_wr_open(const std::filesystem::path& path, const uint64_t offset)
+    {
+        queue.push(Log::WrOpen{path, offset});
+        cond_var.notify_one();
+    };
+
     void log_usrp_channels(uhd::usrp::multi_usrp::sptr usrp)
     {
         queue.push(Log::UsrpChannels{std::move(usrp)});
@@ -316,7 +336,8 @@ private:
                       Log::UhdStreamCmd,
                       Log::UhdTxMetadata,
                       Log::UsrpChannels,
-                      Log::UsrpHardware
+                      Log::UsrpHardware,
+                      Log::WrOpen
                      >, 1024> queue;
 
     std::mutex mutex;
