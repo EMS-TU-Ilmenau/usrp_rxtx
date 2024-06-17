@@ -195,6 +195,7 @@ try {
         // verify time specs
         // TODO: improve this; maybe log and terminate instead of assertion
         assert(md.has_time_spec);
+        // FIXME: breaks reception if device starts burst prematurely
         assert(ts_samples_packet >= ts_samples_next_recv);
 
         if (BOOST_LIKELY(contiguous)) {
@@ -226,7 +227,8 @@ try {
             }
 
             // log zero-padding
-            logger->log_rx_zeropad(ringbufs[0]->get_head(), lost_samples);
+            if (lost_samples)
+                logger->log_rx_zeropad(ringbufs[0]->get_head(), lost_samples);
 
             for (size_t n = 0; n < num_channels; n++) {
                 // zero-pad lost samples (may wrap around Ringbuf)

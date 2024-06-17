@@ -123,6 +123,12 @@ void Config::parse(std::istream& istream)
     usrp.args = std::get<std::string>(map["usrp"]["args"]);
     usrp.sync = std::get<std::string>(map["usrp"]["sync"]);
     cpu.max_latency_usec = (int32_t) std::get<int64_t>(map["cpu"]["max_latency_usec"]);
+    mqtt.host = std::get<std::string>(map["mqtt"]["host"]);
+    mqtt.port = (int) std::get<int64_t>(map["mqtt"]["port"]);
+    mqtt.user = std::get<std::string>(map["mqtt"]["user"]);
+    mqtt.password = std::get<std::string>(map["mqtt"]["password"]);
+    mqtt.prefix = std::get<std::string>(map["mqtt"]["prefix"]);
+    mqtt.pub_samples = (size_t) std::get<int64_t>(map["mqtt"]["pub_samples"]);
     shmem.mount_desc = std::get<std::string>(map["shmem"]["mount_desc"]);
     shmem.mount_ring = std::get<std::string>(map["shmem"]["mount_ring"]);
     shmem.size_desc_mib = (std::size_t) std::get<int64_t>(map["shmem"]["size_desc_mib"]);

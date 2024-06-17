@@ -69,6 +69,13 @@ public:
     auto get_sample_rate_hz() const -> double
     { return desc->sample_rate_hz; }
 
+    auto get_backlog_samples(uint64_t tail) const -> uint64_t
+    {
+        uint64_t head = desc->head.load(std::memory_order_relaxed);
+        assert(tail >= head);
+        return head - tail;
+    }
+
     auto get_clobber_distance(uint64_t tail) const -> int64_t
     {
         uint64_t clob = desc->clob.load(std::memory_order_relaxed);
@@ -106,6 +113,22 @@ public:
             return 0;
         } else {
             return sleep_sec * 1e9;
+        }
+    }
+
+    auto get_aligned_samples(size_t size) -> std::span<const T>
+    {
+        // get producer head aligned to multiple of size
+        uint64_t head = desc->head.load(std::memory_order_relaxed);
+        head -= head % size;
+
+        // requested amount of samples fits in ring buffer
+        if ((head & _mask) >= size) {
+            T *data = (T *) shm_ring.addr + (head & _mask) - size;
+            return {data, size};
+        } else {
+            T *data = (T *) shm_ring.addr + ((head - size) & _mask) - size;
+            return {data, size};
         }
     }
 

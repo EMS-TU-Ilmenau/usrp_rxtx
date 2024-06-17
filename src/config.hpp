@@ -21,6 +21,14 @@ public:
         int32_t max_latency_usec;
     } cpu;
     struct {
+        std::string host;
+        int port;
+        std::string user;
+        std::string password;
+        std::string prefix;
+        size_t pub_samples;
+    } mqtt;
+    struct {
         std::string mount_desc;
         std::string mount_ring;
         std::size_t size_desc_mib;
@@ -61,6 +69,14 @@ private:
         }},
         { "cpu", {
             { "max_latency_usec", 100 }
+        }},
+        { "mqtt", {
+            { "host", "0.0.0.0" },
+            { "port", 1883 },
+            { "user", "" },
+            { "password", "" },
+            { "prefix", "usrp_rxtx" },
+            { "pub_samples", 0 }
         }},
         { "shmem", {
             { "mount_desc", "/dev/hugepages" },

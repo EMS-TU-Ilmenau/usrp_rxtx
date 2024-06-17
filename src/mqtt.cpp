@@ -6,8 +6,15 @@ extern "C" {
 
 #include "mqtt.hpp"
 
-MqttClient::MqttClient(Logger::sptr logger)
+MqttClient::MqttClient(Logger::sptr logger, const Config& cfg)
+    : logger{logger}
 {
+    // append hostname to MQTT topic prefix
+    char hostname[256];
+    if (gethostname(hostname, sizeof(hostname)) != 0)
+        throw syscall_error{"gethostname() failed"};
+    prefix = cfg.mqtt.prefix + "/" + hostname + "/" + cfg.usrp.args;
+
     // FIXME: assumes MqttClient() is used as singleton
     mosquitto_lib_init();
 
@@ -16,19 +23,26 @@ MqttClient::MqttClient(Logger::sptr logger)
     if (mosq == NULL)
         throw mqtt_error{"mosquitto_new() failed", rc};
 
+    rc = mosquitto_username_pw_set(mosq,
+        cfg.mqtt.user.empty() ? nullptr : cfg.mqtt.user.c_str(),
+        cfg.mqtt.password.empty() ? nullptr : cfg.mqtt.password.c_str()
+    );
+    if (rc != MOSQ_ERR_SUCCESS) {
+        mosquitto_destroy(mosq);
+        throw mqtt_error{"mosquitto_username_pw_set() failed", rc};
+    }
+
     rc = mosquitto_threaded_set(mosq, true);
     if (rc != MOSQ_ERR_SUCCESS) {
         mosquitto_destroy(mosq);
         throw mqtt_error{"mosquitto_threaded_set() failed", rc};
     }
 
-    rc = mosquitto_connect(mosq, "127.0.0.1", 1883, 60);
+    rc = mosquitto_connect(mosq, cfg.mqtt.host.c_str(), cfg.mqtt.port, 60);
     if (rc != MOSQ_ERR_SUCCESS) {
         mosquitto_destroy(mosq);
         throw mqtt_error{"mosquitto_connect() failed", rc};
     }
-
-    this->logger = logger;
 
     // spawn worker
     worker_handle = std::thread{&MqttClient::worker, this};
@@ -47,6 +61,22 @@ MqttClient::~MqttClient()
     mosquitto_lib_cleanup();
 }
 
+void MqttClient::publish(const std::string& topic, const std::string& payload)
+{
+    std::string prefixed_topic = prefix + "/" + topic;
+    int rc = mosquitto_publish(mosq, nullptr, prefixed_topic.c_str(), payload.size(), payload.c_str(), 0, false);
+    if (rc != MOSQ_ERR_SUCCESS)
+        throw mqtt_error{"mosquitto_publish() failed", rc};
+}
+
+void MqttClient::publish(const std::string& topic, std::span<const std::byte> payload)
+{
+    std::string prefixed_topic = prefix + "/" + topic;
+    int rc = mosquitto_publish(mosq, nullptr, prefixed_topic.c_str(), payload.size_bytes(), payload.data(), 0, false);
+    if (rc != MOSQ_ERR_SUCCESS)
+        throw mqtt_error{"mosquitto_publish() failed", rc};
+}
+
 void MqttClient::worker()
 try {
 #ifdef _GNU_SOURCE
@@ -62,7 +92,8 @@ try {
             std::chrono::system_clock::now()).time_since_epoch().count();
         if (epoch_nsec >= next_heartbeat) {
             std::string heartbeat = std::to_string(epoch_nsec);
-            rc = mosquitto_publish(mosq, nullptr, "usrp_rxtx/heartbeat", heartbeat.size(), heartbeat.c_str(), 0, false);
+            std::string topic = prefix + "/heartbeat";
+            rc = mosquitto_publish(mosq, nullptr, topic.c_str(), heartbeat.size(), heartbeat.c_str(), 0, false);
             if (rc != MOSQ_ERR_SUCCESS)
                 throw mqtt_error{"mosquitto_publish() failed", rc};
             next_heartbeat = epoch_nsec + 1'000'000'000UL;

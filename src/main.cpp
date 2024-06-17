@@ -66,7 +66,7 @@ try {
     int exit_code = 0;
     try {
         // spawn MQTT client
-        MqttClient::sptr mqtt = std::make_shared<MqttClient>(logger);
+        MqttClient::sptr mqtt = std::make_shared<MqttClient>(logger, cfg);
 
         // register power management quality-of-service (PM QoS) request with
         // kernel. inhibits certain power mangement features that increase
@@ -210,7 +210,7 @@ try {
         logger->log("Initialization succeeded.");
 
         // run until interrupted
-        while (true) {
+        for (size_t n = 0; ; n++) {
             // signal handling with timeout (break loop on SIGINT, or SIGTERM,
             // but ignore SIGHUP)
             const struct timespec timeout = { .tv_sec = 0, .tv_nsec = 100'000'000UL };
@@ -268,6 +268,18 @@ try {
             if (wr && !wr->is_running()) {
                 logger->log("Wr thread stopped unexpectedly. File writing failed.",
                             Log::ERROR);
+                wr.reset();
+            }
+
+            if (wr && wr->is_running() && n % 10 == 0)
+                mqtt->publish("wr_backlog", std::to_string(wr->get_backlog_samples()));
+
+            if (cfg.mqtt.pub_samples && rx && rx->is_running() && n % 10 == 0) {
+                auto ringbufs = rx->get_ringbufs();
+                for (size_t ch = 0; ch < ringbufs.size(); ch++) {
+                    auto samps = ringbufs[ch]->get_aligned_samples(cfg.mqtt.pub_samples);
+                    mqtt->publish("rx_samples/" + std::to_string(ch), std::as_bytes(samps));
+                }
             }
         }
     } catch (const std::exception& e) {

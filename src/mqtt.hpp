@@ -8,10 +8,12 @@
 #include <exception>
 #include <iostream>
 #include <source_location>
+#include <span>
 #include <sstream>
 #include <string>
 #include <thread>
 
+#include "config.hpp"
 #include "error.hpp"
 #include "logging.hpp"
 #include "mosquitto.h"
@@ -35,7 +37,7 @@ class MqttClient {
 public:
     using sptr = std::shared_ptr<MqttClient>;
 
-    MqttClient(Logger::sptr logger);
+    MqttClient(Logger::sptr logger, const Config& cfg);
     ~MqttClient();
 
     // delete copy constructor and copy assignment operator
@@ -45,12 +47,17 @@ public:
     auto is_running() -> bool
     { return run.load(std::memory_order_relaxed); }
 
+    void publish(const std::string& topic, const std::string& payload);
+    void publish(const std::string& topic, std::span<const std::byte> payload);
+
 private:
     std::atomic<bool> run {true};
     std::thread worker_handle;
 
     Logger::sptr logger;
     struct mosquitto *mosq;
+
+    std::string prefix;
 
     void worker();
 };

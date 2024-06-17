@@ -82,6 +82,8 @@ try {
         /// sleep in nanoseconds until next iteration
         uint64_t sleep_ns = 10'000'000UL;
 
+        uint64_t _backlog_samples = 0;
+
         // sequentially write WR_BLOCK_SAMPLES from each Ringbuf
         for (size_t ch = 0; ch < ringbufs.size(); ch++) {
             auto span = ringbufs[ch]->get_consumer_span(tails[ch], WR_BLOCK_SAMPLES);
@@ -90,6 +92,8 @@ try {
             if (span.size() == 0) {
                 sleep_ns = std::min(sleep_ns, ringbufs[ch]->get_consumer_wait(tails[ch], WR_BLOCK_SAMPLES));
                 continue;
+            } else {
+                sleep_ns = 0;
             }
 
             // write span to respective fd
@@ -107,8 +111,11 @@ try {
 
             // update tail pointer and sleep duration
             tails[ch] += ret / sizeof(sample_t);
-            sleep_ns = std::min(sleep_ns, ringbufs[ch]->get_consumer_wait(tails[ch], WR_BLOCK_SAMPLES));
         }
+
+        for (size_t ch = 0; ch < ringbufs.size(); ch++)
+            _backlog_samples += ringbufs[ch]->get_backlog_samples(tails[ch]);
+        backlog_samples.store(_backlog_samples, std::memory_order_relaxed);
 
         // sleep until at least one Ringbuf should return a consumer span
         std::this_thread::sleep_for(std::chrono::nanoseconds(sleep_ns));

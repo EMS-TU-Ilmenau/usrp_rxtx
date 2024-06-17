@@ -20,12 +20,17 @@ public:
        const uint64_t start_nsec);
     ~Wr();
 
+    auto get_backlog_samples() const -> uint64_t
+    { return backlog_samples.load(std::memory_order_relaxed); }
+
     auto is_running() const -> bool
     { return run.load(std::memory_order_relaxed); }
 
 private:
     std::atomic<bool> run {true};
     std::thread worker_handle;
+
+    std::atomic<uint64_t> backlog_samples;
 
     std::vector<Ringbuf<sample_t>::sptr> ringbufs;
     Logger::sptr logger;

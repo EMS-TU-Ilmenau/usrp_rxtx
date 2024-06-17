@@ -46,7 +46,7 @@ public:
         std::stringstream buf;
         buf << "generic_error: "
             << location.file_name() << ':' << location.line() << ": "
-            << message << ": " << message;
+            << message;
         what_str = std::move(buf.str());
     }
 };
