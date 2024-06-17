@@ -52,11 +52,17 @@ auto Sync::wait_pps() -> uhd::time_spec_t
     uhd::time_spec_t now  = usrp->get_time_last_pps();
     uhd::time_spec_t last = now;
 
-    // FIXME: not interruptible
+    // use steady_clock to measure timeout, because USRP time may jump,
+    // e.g., when setting USRP time at next PPS edge
+    const auto timeout = std::chrono::steady_clock::now()
+                       + std::chrono::seconds(2);
+
+    // wait for next PPS
     while (now == last) {
+        if (std::chrono::steady_clock::now() >= timeout)
+            throw generic_error{"Timed out waiting for PPS signal."};
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        last = now;
-        now  = usrp->get_time_last_pps();
+        now = usrp->get_time_last_pps();
     }
 
     return now;
