@@ -134,16 +134,22 @@ void Config::parse(std::istream& istream)
     shmem.size_desc_mib = (std::size_t) std::get<int64_t>(map["shmem"]["size_desc_mib"]);
     shmem.size_ring_mib = (std::size_t) std::get<int64_t>(map["shmem"]["size_ring_mib"]);
     rx.subdev = std::get<std::string>(map["rx"]["subdev"]);
-    rx.rate = std::get<double>(map["rx"]["rate"]);
+    rx.antenna = std::get<std::string>(map["rx"]["antenna"]);
+    rx.bandwidth = std::get<double>(map["rx"]["bandwidth"]);
     rx.freq_rf = std::get<double>(map["rx"]["freq_rf"]);
     rx.freq_dsp = std::get<double>(map["rx"]["freq_dsp"]);
     rx.gain = std::get<double>(map["rx"]["gain"]);
-    tx.subdev = std::get<std::string>(map["tx"]["subdev"]);
+    rx.lo_source = std::get<std::string>(map["rx"]["lo_source"]);
+    rx.rate = std::get<double>(map["rx"]["rate"]);
     tx.file = std::get<std::string>(map["tx"]["file"]);
-    tx.rate = std::get<double>(map["tx"]["rate"]);
+    tx.subdev = std::get<std::string>(map["tx"]["subdev"]);
+    tx.antenna = std::get<std::string>(map["tx"]["antenna"]);
+    tx.bandwidth = std::get<double>(map["tx"]["bandwidth"]);
     tx.freq_rf = std::get<double>(map["tx"]["freq_rf"]);
     tx.freq_dsp = std::get<double>(map["tx"]["freq_dsp"]);
     tx.gain = std::get<double>(map["tx"]["gain"]);
+    tx.lo_source = std::get<std::string>(map["tx"]["lo_source"]);
+    tx.rate = std::get<double>(map["tx"]["rate"]);
     wr.directory = std::get<std::string>(map["wr"]["directory"]);
 }
 

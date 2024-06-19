@@ -438,17 +438,23 @@ void Log::UsrpChannels::serialize(std::ostream& console, std::ostream& logfile) 
 
     Json::Array chans_rx;
     for (size_t chan = 0; chan < usrp->get_rx_num_channels(); chan++) {
-        chans_rx.emplace_back(Json::Object {{
-            { "rate", usrp->get_rx_rate(chan) },
-            { "gain", usrp->get_rx_gain(chan) }
+        chans_rx.emplace_back(Json::Object{{
+            { "antenna", usrp->get_rx_antenna(chan) },
+            { "bandwidth", usrp->get_rx_bandwidth(chan) },
+            { "gain", usrp->get_rx_gain(chan) },
+            { "lo_source", usrp->get_rx_lo_source(uhd::usrp::multi_usrp::ALL_LOS, chan) },
+            { "rate", usrp->get_rx_rate(chan) }
         }});
     }
 
     Json::Array chans_tx;
     for (size_t chan = 0; chan < usrp->get_tx_num_channels(); chan++) {
-        chans_tx.emplace_back(Json::Object {{
-            { "rate", usrp->get_tx_rate(chan) },
-            { "gain", usrp->get_tx_gain(chan) }
+        chans_tx.emplace_back(Json::Object{{
+            { "antenna", usrp->get_tx_antenna(chan) },
+            { "bandwidth", usrp->get_tx_bandwidth(chan) },
+            { "gain", usrp->get_tx_gain(chan) },
+            { "lo_source", usrp->get_tx_lo_source(uhd::usrp::multi_usrp::ALL_LOS, chan) },
+            { "rate", usrp->get_tx_rate(chan) }
         }});
     }
 

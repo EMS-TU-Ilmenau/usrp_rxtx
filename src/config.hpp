@@ -36,18 +36,24 @@ public:
     } shmem;
     struct {
         std::string subdev;
-        double rate;
+        std::string antenna;
+        double bandwidth;
         double freq_rf;
         double freq_dsp;
         double gain;
+        std::string lo_source;
+        double rate;
     } rx;
     struct {
-        std::string subdev;
         std::string file;
-        double rate;
+        std::string subdev;
+        std::string antenna;
+        double bandwidth;
         double freq_rf;
         double freq_dsp;
         double gain;
+        std::string lo_source;
+        double rate;
     } tx;
     struct {
         std::string directory;
@@ -86,18 +92,24 @@ private:
         }},
         { "rx", {
             { "subdev", "" },
-            { "rate", 0. },
+            { "antenna", "" },
+            { "bandwidth", 0. },
             { "freq_rf", 0. },
             { "freq_dsp", 0. },
-            { "gain", 0. }
+            { "gain", 0. },
+            { "lo_source", "" },
+            { "rate", 0. },
         }},
         { "tx", {
-            { "subdev", "" },
             { "file", "" },
-            { "rate", 0. },
+            { "subdev", "" },
+            { "antenna", "" },
+            { "bandwidth", 0. },
             { "freq_rf", 0. },
             { "freq_dsp", 0. },
-            { "gain", 0. }
+            { "gain", 0. },
+            { "lo_source", "" },
+            { "rate", 0. },
         }},
         { "wr", {
             { "directory", "" },

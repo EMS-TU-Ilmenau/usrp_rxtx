@@ -184,10 +184,24 @@ try {
         // set gains after tuning to minimize emission of local oscillator
         // leakage into bands off the the target RF frequency
         if (!cfg.rx.subdev.empty()) {
-            usrp->set_rx_gain(cfg.rx.gain);
+            for (size_t ch = 0; ch < usrp->get_rx_num_channels(); ch++) {
+                if (!cfg.rx.antenna.empty())
+                    usrp->set_rx_antenna(cfg.rx.antenna, ch);
+                usrp->set_rx_bandwidth(cfg.rx.bandwidth, ch);
+                usrp->set_rx_gain(cfg.rx.gain, ch);
+                if (!cfg.rx.lo_source.empty())
+                    usrp->set_rx_lo_source(cfg.rx.lo_source, uhd::usrp::multi_usrp::ALL_LOS, ch);
+            }
         }
         if (!cfg.tx.subdev.empty()) {
-            usrp->set_tx_gain(cfg.tx.gain);
+            for (size_t ch = 0; ch < usrp->get_tx_num_channels(); ch++) {
+                if (!cfg.tx.antenna.empty())
+                    usrp->set_tx_antenna(cfg.tx.antenna, ch);
+                usrp->set_tx_bandwidth(cfg.tx.bandwidth, ch);
+                usrp->set_tx_gain(cfg.tx.gain, ch);
+                if (!cfg.tx.lo_source.empty())
+                    usrp->set_tx_lo_source(cfg.tx.lo_source, uhd::usrp::multi_usrp::ALL_LOS, ch);
+            }
         }
 
         // log USRP hardware and channel configuration
@@ -195,7 +209,6 @@ try {
         logger->log_usrp_channels(usrp);
 
         // start Rx and Tx threads
-        // NOTE: allocate 2M hugepages via `echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages`
         Rx::sptr rx;
         if (!cfg.rx.subdev.empty())
             rx = std::make_shared<Rx>(usrp, logger, cfg);
