@@ -87,6 +87,25 @@ try {
 
     int rc;
     while (run.load(std::memory_order_relaxed)) {
+        // run mosquitto network loop (will return early and often on activity)
+        rc = mosquitto_loop(mosq, 100, 1);
+        if (rc != MOSQ_ERR_SUCCESS) {
+            logger->log_exception(std::make_exception_ptr(
+                mqtt_error{"mosquitto_loop() failed", rc}
+            ));
+
+            // FIXME: blindly reconnecting regardless of actual error
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            rc = mosquitto_reconnect(mosq);
+            if (rc != MOSQ_ERR_SUCCESS) {
+                logger->log_exception(std::make_exception_ptr(
+                    mqtt_error{"mosquitto_reconnect() failed", rc}
+                ));
+                std::this_thread::sleep_for(std::chrono::seconds(10));
+            }
+            continue;
+        }
+
         // send periodic heartbeat
         uint64_t epoch_nsec = std::chrono::time_point_cast<std::chrono::nanoseconds>(
             std::chrono::system_clock::now()).time_since_epoch().count();
@@ -95,16 +114,11 @@ try {
             std::string topic = prefix + "/heartbeat";
             rc = mosquitto_publish(mosq, nullptr, topic.c_str(), heartbeat.size(), heartbeat.c_str(), 0, false);
             if (rc != MOSQ_ERR_SUCCESS)
-                throw mqtt_error{"mosquitto_publish() failed", rc};
+                logger->log_exception(std::make_exception_ptr(
+                    mqtt_error{"mosquitto_publish() failed", rc}
+                ));
             next_heartbeat = epoch_nsec + 1'000'000'000UL;
         }
-
-        // run mosquitto network loop (will return early and often on activity)
-        // TODO: error handling on recoverable errors, most importantly
-        //       mosquitto_reconnect() on MOSQ_ERR_CONN_LOST
-        rc = mosquitto_loop(mosq, 100, 1);
-        if (rc != MOSQ_ERR_SUCCESS)
-            throw mqtt_error{"mosquitto_loop() failed", rc};
     }
 } catch (const std::exception& e) {
     logger->log_exception(std::current_exception());
