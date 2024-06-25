@@ -115,7 +115,7 @@ try {
     /// contiguous sample operation (no gap between last and next recv())
     // depending on the device, the first packet's timestamp may differ from
     // the supplied timestamp, so always start in non-contiguous mode
-    bool contiguous = false;
+    uint64_t contiguous = 0;
 
     while (run.load(std::memory_order_relaxed)) {
         size_t recv_max_samples = max_num_samps;
@@ -157,7 +157,7 @@ try {
                 // the next uhd::rx_streamer::recv() call will likely return
                 // samples, so keep receiving. should no more samples arrive,
                 // it will be caught by the timeout handling below.
-                contiguous = false;
+                contiguous = 0;
                 break;
             case uhd::rx_metadata_t::ERROR_CODE_ALIGNMENT:
             case uhd::rx_metadata_t::ERROR_CODE_BAD_PACKET:
@@ -261,7 +261,8 @@ try {
 
         // next successful uhd::rx_streamer::recv() either yields contiguous
         // samples or returns another error
-        contiguous = true;
+        contiguous += rcvd_samples;
+        continuous_samples.store(contiguous, std::memory_order_relaxed);
     }
 
     // stop streaming

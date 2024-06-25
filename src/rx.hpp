@@ -24,6 +24,9 @@ public:
     Rx(const Rx&) = delete;
     Rx& operator=(const Rx&) = delete;
 
+    auto get_continuous_samples() const -> uint64_t
+    { return continuous_samples.load(std::memory_order_relaxed); }
+
     auto get_ringbufs() const -> std::vector<Ringbuf<sample_t>::sptr>
     { return ringbufs; }
 
@@ -34,6 +37,8 @@ private:
     std::atomic<bool> run {true};
     std::thread worker_handle;
     std::latch worker_latch {1};
+
+    std::atomic<uint64_t> continuous_samples {0};
 
     uhd::usrp::multi_usrp::sptr usrp;
     Logger::sptr logger;

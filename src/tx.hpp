@@ -22,6 +22,9 @@ public:
     Tx(const Tx&) = delete;
     Tx& operator=(const Tx&) = delete;
 
+    auto get_burst_samples() const -> uint64_t
+    { return burst_samples.load(std::memory_order_relaxed); }
+
     void toggle_mute()
     { mute.store(!is_muted(), std::memory_order_relaxed); }
 
@@ -37,6 +40,8 @@ private:
     std::atomic<bool> mute {false};
     std::atomic<bool> run {true};
     std::thread worker_handle;
+
+    std::atomic<uint64_t> burst_samples {0};
 
     void worker(std::vector<Tx::sample_t>&& tx_signal);
 };

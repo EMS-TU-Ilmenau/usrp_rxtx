@@ -153,6 +153,8 @@ try {
             }
         }
 
+        burst_samples.store(samples_burst, std::memory_order_relaxed);
+
         // If a streaming error occurred (e.g., buffer underflow or packet loss),
         // the USRP does not ensure coherent sampling by zeropadding lost
         // samples and discarding late samples. The only way to mitigate that
@@ -174,6 +176,7 @@ try {
             // reset samples_burst so next main loop iteration starts with a
             // new burst
             samples_burst = 0;
+            burst_samples.store(0, std::memory_order_relaxed);
 
             // process mute request
             if (mute.load(std::memory_order_relaxed)) {

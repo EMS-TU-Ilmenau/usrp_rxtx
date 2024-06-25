@@ -239,7 +239,7 @@ try {
             } else if (ret == SIGINT || ret == SIGTERM) {
                 logger->log("Received SIGINT or SIGTERM. Exiting gracefully.");
                 break;
-            } else if (ret == SIGUSR1) {
+            } else if (ret == SIGUSR1 && rx) {
                 logger->log("Received SIGUSR1. Toggling file writing.");
                 if (wr) {
                     wr.reset();
@@ -250,7 +250,7 @@ try {
                         (usrp->get_time_now().get_full_secs() + 1) * 1'000'000'000UL
                     );
                 }
-            } else if (ret == SIGUSR2) {
+            } else if (ret == SIGUSR2 && tx) {
                 logger->log("Received SIGUSR2. Toggling Tx muting.");
                 tx->toggle_mute();
             }
@@ -299,6 +299,19 @@ try {
                     auto samps = ringbufs[ch]->get_aligned_samples(cfg.mqtt.pub_samples);
                     mqtt->publish("rx_samples/" + std::to_string(ch), std::as_bytes(samps));
                 }
+            }
+
+            if (n % 10 == 0) {
+                const auto now = usrp->get_time_now();
+                Json::Object status {{
+                    { "heartbeat", (uint64_t) (now.get_full_secs() * 1e9) +
+                                   (uint64_t) (now.get_frac_secs() * 1e9)},
+                    { "rx_continuous", rx ? (int64_t) rx->get_continuous_samples() : (int64_t) -1 },
+                    { "tx_burst", tx ? (int64_t) tx->get_burst_samples() : (int64_t) -1 },
+                    { "wr_backlog", wr ? (int64_t) wr->get_backlog_samples() : (int64_t) -1 },
+                    { "wr_free", rx ? (int64_t) std::filesystem::space(wr_dir).available : (int64_t) -1 }
+                }};
+                mqtt->publish("", status.dumps());
             }
         }
     } catch (const std::exception& e) {

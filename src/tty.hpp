@@ -45,6 +45,8 @@ public:
     auto wr(const std::string& buf) -> ssize_t
     {
         ssize_t ret = write(tty_fd, buf.c_str(), buf.size());
+        if (ret == -1)
+            throw syscall_error{"write() failed"};
         tcdrain(tty_fd);
         return ret;
     }

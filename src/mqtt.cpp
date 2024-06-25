@@ -63,7 +63,7 @@ MqttClient::~MqttClient()
 
 void MqttClient::publish(const std::string& topic, const std::string& payload)
 {
-    std::string prefixed_topic = prefix + "/" + topic;
+    std::string prefixed_topic = topic.empty() ? prefix : prefix + "/" + topic;
     int rc = mosquitto_publish(mosq, nullptr, prefixed_topic.c_str(), payload.size(), payload.c_str(), 0, false);
     if (rc != MOSQ_ERR_SUCCESS)
         throw mqtt_error{"mosquitto_publish() failed", rc};
@@ -71,7 +71,7 @@ void MqttClient::publish(const std::string& topic, const std::string& payload)
 
 void MqttClient::publish(const std::string& topic, std::span<const std::byte> payload)
 {
-    std::string prefixed_topic = prefix + "/" + topic;
+    std::string prefixed_topic = topic.empty() ? prefix : prefix + "/" + topic;
     int rc = mosquitto_publish(mosq, nullptr, prefixed_topic.c_str(), payload.size_bytes(), payload.data(), 0, false);
     if (rc != MOSQ_ERR_SUCCESS)
         throw mqtt_error{"mosquitto_publish() failed", rc};
@@ -83,42 +83,27 @@ try {
     pthread_setname_np(pthread_self(), "mqtt");
 #endif
 
-    uint64_t next_heartbeat = 0;
-
     int rc;
     while (run.load(std::memory_order_relaxed)) {
         // run mosquitto network loop (will return early and often on activity)
         rc = mosquitto_loop(mosq, 100, 1);
-        if (rc != MOSQ_ERR_SUCCESS) {
-            logger->log_exception(std::make_exception_ptr(
-                mqtt_error{"mosquitto_loop() failed", rc}
-            ));
-
-            // FIXME: blindly reconnecting regardless of actual error
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-            rc = mosquitto_reconnect(mosq);
-            if (rc != MOSQ_ERR_SUCCESS) {
-                logger->log_exception(std::make_exception_ptr(
-                    mqtt_error{"mosquitto_reconnect() failed", rc}
-                ));
-                std::this_thread::sleep_for(std::chrono::seconds(10));
-            }
+        if (rc == MOSQ_ERR_SUCCESS)
             continue;
-        }
 
-        // send periodic heartbeat
-        uint64_t epoch_nsec = std::chrono::time_point_cast<std::chrono::nanoseconds>(
-            std::chrono::system_clock::now()).time_since_epoch().count();
-        if (epoch_nsec >= next_heartbeat) {
-            std::string heartbeat = std::to_string(epoch_nsec);
-            std::string topic = prefix + "/heartbeat";
-            rc = mosquitto_publish(mosq, nullptr, topic.c_str(), heartbeat.size(), heartbeat.c_str(), 0, false);
-            if (rc != MOSQ_ERR_SUCCESS)
-                logger->log_exception(std::make_exception_ptr(
-                    mqtt_error{"mosquitto_publish() failed", rc}
-                ));
-            next_heartbeat = epoch_nsec + 1'000'000'000UL;
-        }
+        logger->log_exception(std::make_exception_ptr(
+            mqtt_error{"mosquitto_loop() failed", rc}
+        ));
+
+        // FIXME: blindly reconnecting regardless of actual error
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        rc = mosquitto_reconnect(mosq);
+        if (rc == MOSQ_ERR_SUCCESS)
+            continue;
+
+        logger->log_exception(std::make_exception_ptr(
+            mqtt_error{"mosquitto_reconnect() failed", rc}
+        ));
+        std::this_thread::sleep_for(std::chrono::seconds(10));
     }
 } catch (const std::exception& e) {
     logger->log_exception(std::current_exception());
