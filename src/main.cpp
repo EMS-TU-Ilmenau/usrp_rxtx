@@ -130,6 +130,12 @@ try {
         } else if (cfg.usrp.sync == "10mhz+1pps") {
             sync.sync_10mhz();
             sync.sync_1pps();
+        } else if (cfg.usrp.sync == "gpsdo") {
+            sync.sync_gpsdo();
+        } else if (cfg.usrp.sync == "b205_raspi") {
+            sync.sync_b205("/dev/ttyAMA0");
+        } else if (cfg.usrp.sync == "b205_mini") {
+            sync.sync_b205("/dev/ttyUSB0");
         } else if (!cfg.usrp.sync.empty()) {
             throw generic_error{"unknown usrp.sync setting: " + cfg.usrp.sync};
         }
