@@ -48,6 +48,20 @@ void Sync::sync_1pps()
     logger->log("Set USRP time to: " + std::to_string(pps.get_real_secs()));
 }
 
+void Sync::sync_host()
+{
+    // set usrp time to system clock rounded to closest full second
+    std::chrono::time_point<std::chrono::system_clock> now {std::chrono::system_clock::now()};
+    auto duration = now.time_since_epoch();
+
+    auto seconds = std::chrono::duration_cast<std::chrono::seconds>(duration);
+    duration -= seconds;
+    auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(duration);
+    usrp->set_time_now(uhd::time_spec_t{
+        seconds.count(), nanoseconds.count() * 1e-9
+    });
+}
+
 void Sync::sync_gpsdo()
 {
     // select internal GPSDO as clock and time source

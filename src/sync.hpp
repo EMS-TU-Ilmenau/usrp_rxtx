@@ -17,6 +17,7 @@ public:
 
     void sync_10mhz();
     void sync_1pps();
+    void sync_host();
     void sync_gpsdo();
     void sync_b205(const std::filesystem::path& tty_path);
     auto wait_pps() -> uhd::time_spec_t;
