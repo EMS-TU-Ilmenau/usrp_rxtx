@@ -166,32 +166,46 @@ try {
             mqtt_error{"mosquitto_loop() failed", rc}
         ));
 
-        // FIXME: blindly reconnecting regardless of actual error
-        // FIXME: mosquitto_reconnect() invokes connect() syscall, which may
-        //        block for several minutes, stalling reconnection attempts
-        //        even when the network is up again. need to hack connect
-        //        timeouts into libmosquitto:
+        // periodically try to reconnect if mosquitto_loop() failed, regardless
+        // of the respective error. even if the connection has not been lost,
+        // mosquitto_reconnect() will close the socket and reconnect.
+        // FIXME: mosquitto_reconnect() invokes connect() synchronously, which
+        //        may block for several minutes depending on the OS,
+        //        unnecessarily stalling reconnection attempts even when the
+        //        network is up again.
+        //        need to hack connect timeouts into libmosquitto:
+        //        https://github.com/eclipse/mosquitto/issues/3051
         //        https://stackoverflow.com/questions/2597608/c-socket-connection-timeout
-        rc = mosquitto_reconnect(mosq);
-        if (rc == MOSQ_ERR_SUCCESS) {
-#if _POSIX_C_SOURCE >= 200809L
-            int sockfd = mosquitto_socket(mosq);
-            if (sockfd == -1)
-                continue;
-            rc = setsockopt(sockfd, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(sndbuf));
-            if (rc != 0) {
-                logger->log_exception(std::make_exception_ptr(
-                    syscall_error{"setsockopt() failed"}
-                ));
-            }
-#endif
-            continue;
+        // NOTE: non-portable workaround/hack with system-wide side effect is
+        //       reducing number of SYN retries via:
+        //       echo 2 > /proc/sys/net/ipv4/tcp_syn_retries
+        while (run.load(std::memory_order_relaxed)) {
+            auto time_reconnect = std::chrono::steady_clock::now();
+            rc = mosquitto_reconnect(mosq);
+            if (rc == MOSQ_ERR_SUCCESS)
+                break;
+
+            logger->log_exception(std::make_exception_ptr(
+                mqtt_error{"mosquitto_reconnect() failed", rc}
+            ));
+
+            // wait at least 5 seconds before retrying to reconnect
+            // FIXME: may block graceful termination for up to 5 seconds
+            std::this_thread::sleep_until(time_reconnect + std::chrono::seconds(5));
         }
 
-        logger->log_exception(std::make_exception_ptr(
-            mqtt_error{"mosquitto_reconnect() failed", rc}
-        ));
-        std::this_thread::sleep_for(std::chrono::seconds(5));
+#if _POSIX_C_SOURCE >= 200809L
+        // set SO_SNDBUF after successfully reconnecting
+        int sockfd = mosquitto_socket(mosq);
+        if (sockfd == -1)
+            continue;
+        rc = setsockopt(sockfd, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(sndbuf));
+        if (rc != 0) {
+            logger->log_exception(std::make_exception_ptr(
+                syscall_error{"setsockopt() failed"}
+            ));
+        }
+#endif
     }
 } catch (const std::exception& e) {
     logger->log_exception(std::current_exception());
