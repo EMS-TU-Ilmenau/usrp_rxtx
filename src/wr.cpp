@@ -29,6 +29,8 @@ Wr::Wr(std::vector<Ringbuf<sample_t>::sptr>&& _ringbufs,
             throw generic_error{"ringbuf sample rates differ"};
     }
 
+    sample_rate_hz = ringbufs[0]->get_sample_rate_hz();
+
     try {
         for (size_t ch = 0; ch < ringbufs.size(); ch++) {
             // get Ringbuf tail for timestamp (may throw)
@@ -78,6 +80,7 @@ try {
 
     assert(fds.size() == ringbufs.size());
 
+    uint64_t _samples_written = 0;
     while (run.load(std::memory_order_relaxed)) {
         /// sleep in nanoseconds until next iteration
         uint64_t sleep_ns = 10'000'000UL;
@@ -111,11 +114,16 @@ try {
 
             // update tail pointer and sleep duration
             tails[ch] += ret / sizeof(sample_t);
+
+            // increment number of written samples
+            if (ch == 0)
+                _samples_written += ret / sizeof(sample_t);
         }
 
         for (size_t ch = 0; ch < ringbufs.size(); ch++)
             _backlog_samples += ringbufs[ch]->get_backlog_samples(tails[ch]);
         backlog_samples.store(_backlog_samples, std::memory_order_relaxed);
+        samples_written.store(_samples_written, std::memory_order_relaxed);
 
         // sleep until at least one Ringbuf should return a consumer span
         std::this_thread::sleep_for(std::chrono::nanoseconds(sleep_ns));

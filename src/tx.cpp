@@ -28,6 +28,7 @@ extern "C" {
 Tx::Tx(uhd::usrp::multi_usrp::sptr usrp, Logger::sptr logger, const Config& cfg)
     : usrp{usrp}
     , logger{logger}
+    , sample_rate_hz{usrp->get_tx_rate()}
 {
     // TODO: implement support for multiple Tx channels
     if (usrp->get_tx_num_channels() != 1)
@@ -86,7 +87,7 @@ try {
     uhd::tx_streamer::sptr tx = usrp->get_tx_stream(stream_args);
 
     // retrieve streaming parameters
-    const uint64_t rate_hz = usrp->get_tx_rate();
+    const uint64_t rate_hz = this->sample_rate_hz;
     const uint64_t samps_per_frame = tx->get_max_num_samps();
 
     // tx_signal contains a single period of the transmit signal. create a

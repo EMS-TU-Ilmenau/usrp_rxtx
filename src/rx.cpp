@@ -11,6 +11,7 @@ extern "C" {
 Rx::Rx(uhd::usrp::multi_usrp::sptr usrp, Logger::sptr logger, const Config& cfg)
     : usrp{usrp}
     , logger{logger}
+    , sample_rate_hz{usrp->get_rx_rate()}
 {
     // allocate Rx ringbuffers
     for (size_t ch = 0; ch < usrp->get_rx_num_channels(); ch++) {
@@ -70,7 +71,7 @@ try {
     uhd::rx_streamer::sptr rx = usrp->get_rx_stream(stream_args);
 
     // cache constant parameters
-    const double sample_rate_hz = usrp->get_rx_rate();
+    const double sample_rate_hz = this->sample_rate_hz;
     const size_t num_channels = rx->get_num_channels();
     const size_t max_num_samps = rx->get_max_num_samps();
 
@@ -200,6 +201,8 @@ try {
 
         if (BOOST_LIKELY(contiguous)) {
             // verify time specs of contiguous sample packets
+            // FIXME: results in one log entry per packet if time specs do mismatch
+            /*
             if (BOOST_UNLIKELY(ts_samples_packet != ts_samples_next_recv)) {
                 // TODO: implement as Log::RxTimespecMismatch
                 logger->log("Timestamp mismatch: "
@@ -207,6 +210,7 @@ try {
                             + std::to_string(ts_samples_next_recv),
                             Log::WARN);
             }
+            */
 
             // regular receive: samples are already correctly placed in Ringbufs
             for (size_t n = 0; n < num_channels; n++) {

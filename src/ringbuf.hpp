@@ -72,7 +72,8 @@ public:
     auto get_backlog_samples(uint64_t tail) const -> uint64_t
     {
         uint64_t head = desc->head.load(std::memory_order_relaxed);
-        assert(tail >= head);
+        if (tail >= head)
+            return 0;
         return head - tail;
     }
 

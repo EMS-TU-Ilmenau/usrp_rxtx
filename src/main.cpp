@@ -49,9 +49,15 @@ try {
     if (ret != 0)
         throw syscall_error{"pthread_sigmask() failed", ret};
 
+    // get hostname
+    char hostnamebuf[256];
+    if (gethostname(hostnamebuf, sizeof(hostnamebuf)) != 0)
+        throw syscall_error{"gethostname() failed"};
+    const std::string hostname {hostnamebuf};
+
     // spawn Logger
     Logger::sptr logger = std::make_shared<Logger>(
-        "usrp_rxtx_" + cfg.usrp.args, std::move(cfg.to_json()));
+        "usrp_rxtx_" + hostname + "_" + cfg.usrp.args, std::move(cfg.to_json()));
     logger->log("Initializing ...", Log::INFO);
 
     // set up UHD logging
@@ -121,15 +127,18 @@ try {
         }
 
         // synchronize **after** setting the master clock rate (MCR) as any
-        // change to MCR will cause jump in device time
+        // change to MCR will cause a jump in device time
         Sync sync {usrp, logger, cfg};
         if (cfg.usrp.sync == "10mhz") {
             sync.sync_10mhz();
+            sync.sync_host();
         } else if (cfg.usrp.sync == "1pps") {
             sync.sync_1pps();
         } else if (cfg.usrp.sync == "10mhz+1pps") {
             sync.sync_10mhz();
             sync.sync_1pps();
+        } else if (cfg.usrp.sync == "host") {
+            sync.sync_host();
         } else if (cfg.usrp.sync == "gpsdo") {
             sync.sync_gpsdo();
         } else if (cfg.usrp.sync == "b205_raspi") {
@@ -246,7 +255,7 @@ try {
                 } else {
                     wr = std::make_shared<Wr>(
                         rx->get_ringbufs(), logger,
-                        wr_dir / ("rx_" + cfg.usrp.args),
+                        wr_dir / ("rx_" + hostname + "_" + cfg.usrp.args),
                         (usrp->get_time_now().get_full_secs() + 1) * 1'000'000'000UL
                     );
                 }
@@ -284,34 +293,45 @@ try {
                 break;
             }
 
-            if (wr && !wr->is_running()) {
-                logger->log("Wr thread stopped unexpectedly. File writing failed.",
-                            Log::ERROR);
-                wr.reset();
+            if (n % 10 == 0) {
+                Json::json_t rx_seconds =
+                    rx ? Json::json_t{rx->get_rx_seconds()}
+                       : Json::Null{};
+                Json::json_t tx_seconds =
+                    tx ? !tx->is_muted() ? Json::json_t{tx->get_tx_seconds()}
+                                         : Json::json_t{"MUTE"}
+                       : Json::Null{};
+                Json::json_t wr_seconds =
+                    wr ? wr->is_running() ? Json::json_t{wr->get_wr_seconds()}
+                                          : Json::json_t{"FAILED"}
+                       : Json::Null{};
+                Json::json_t wr_backlog =
+                    wr ? Json::json_t{wr->get_backlog_bytes()}
+                       : Json::Null{};
+                Json::json_t wr_free =
+                    rx ? Json::json_t {std::filesystem::space(wr_dir).available}
+                       : Json::Null{};
+
+                const auto now = usrp->get_time_now();
+                Json::Object status {{
+                    { "time_ns", (uint64_t) (now.get_full_secs() * 1e9) +
+                                 (uint64_t) (now.get_frac_secs() * 1e9)},
+                    { "rx_seconds", rx_seconds },
+                    { "tx_seconds", tx_seconds },
+                    { "wr_seconds", wr_seconds },
+                    { "wr_backlog", wr_backlog },
+                    { "wr_free", wr_free }
+                }};
+                mqtt->publish("", status.dumps());
             }
 
-            if (wr && wr->is_running() && n % 10 == 0)
-                mqtt->publish("wr_backlog", std::to_string(wr->get_backlog_samples()));
-
+            // publish samples after status so status data take precedence in SNDBUF
             if (cfg.mqtt.pub_samples && rx && rx->is_running() && n % 10 == 0) {
                 auto ringbufs = rx->get_ringbufs();
                 for (size_t ch = 0; ch < ringbufs.size(); ch++) {
                     auto samps = ringbufs[ch]->get_aligned_samples(cfg.mqtt.pub_samples);
                     mqtt->publish("rx_samples/" + std::to_string(ch), std::as_bytes(samps));
                 }
-            }
-
-            if (n % 10 == 0) {
-                const auto now = usrp->get_time_now();
-                Json::Object status {{
-                    { "heartbeat", (uint64_t) (now.get_full_secs() * 1e9) +
-                                   (uint64_t) (now.get_frac_secs() * 1e9)},
-                    { "rx_continuous", rx ? (int64_t) rx->get_continuous_samples() : (int64_t) -1 },
-                    { "tx_burst", tx ? (int64_t) tx->get_burst_samples() : (int64_t) -1 },
-                    { "wr_backlog", wr ? (int64_t) wr->get_backlog_samples() : (int64_t) -1 },
-                    { "wr_free", rx ? (int64_t) std::filesystem::space(wr_dir).available : (int64_t) -1 }
-                }};
-                mqtt->publish("", status.dumps());
             }
         }
     } catch (const std::exception& e) {

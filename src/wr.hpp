@@ -20,8 +20,11 @@ public:
        const uint64_t start_nsec);
     ~Wr();
 
-    auto get_backlog_samples() const -> uint64_t
-    { return backlog_samples.load(std::memory_order_relaxed); }
+    auto get_backlog_bytes() const -> uint64_t
+    { return backlog_samples.load(std::memory_order_relaxed) * sizeof(sample_t); }
+
+    auto get_wr_seconds() const -> double
+    { return samples_written.load(std::memory_order_relaxed) / sample_rate_hz; }
 
     auto is_running() const -> bool
     { return run.load(std::memory_order_relaxed); }
@@ -30,7 +33,9 @@ private:
     std::atomic<bool> run {true};
     std::thread worker_handle;
 
-    std::atomic<uint64_t> backlog_samples;
+    std::atomic<uint64_t> backlog_samples {0};
+    std::atomic<uint64_t> samples_written {0};
+    double sample_rate_hz {0.};
 
     std::vector<Ringbuf<sample_t>::sptr> ringbufs;
     Logger::sptr logger;
