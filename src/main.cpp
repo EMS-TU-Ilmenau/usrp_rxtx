@@ -249,11 +249,19 @@ try {
 
         logger->log("Initialization succeeded.");
 
+        /// time of last MQTT status publication in seconds since POSIX epoch
+        uint64_t last_publish_sec = 0;
+
         // run until interrupted
-        for (size_t n = 0; ; n++) {
-            // signal handling with timeout (break loop on SIGINT, or SIGTERM,
-            // but ignore SIGHUP)
-            const struct timespec timeout = { .tv_sec = 0, .tv_nsec = 100'000'000UL };
+        while (true) {
+            // get current POSIX time in nanoseconds
+            const uint64_t time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::system_clock::now().time_since_epoch()
+            ).count();
+
+            // signal handling with timeout aligned to 0.1 seconds
+            const long timeout_nsec = 100'000'000L - (long) time_ns % 100'000'000L;
+            const struct timespec timeout = { .tv_sec = 0, .tv_nsec = timeout_nsec };
             int ret = sigtimedwait(&set, nullptr, &timeout);
             if (ret == -1 && errno != EAGAIN && errno != EINTR) {
                 throw syscall_error{"sigtimedwait() failed"};
@@ -305,40 +313,50 @@ try {
                 break;
             }
 
-            if (n % 10 == 0) {
-                Json::json_t rx_seconds =
-                    rx ? Json::json_t{rx->get_rx_seconds()}
-                       : Json::Null{};
-                Json::json_t tx_seconds =
-                    tx ? !tx->is_muted() ? Json::json_t{tx->get_tx_seconds()}
-                                         : Json::json_t{"MUTE"}
-                       : Json::Null{};
-                Json::json_t wr_seconds =
-                    wr ? wr->is_running() ? Json::json_t{wr->get_wr_seconds()}
-                                          : Json::json_t{"FAILED"}
-                       : Json::Null{};
-                Json::json_t wr_backlog =
-                    wr ? Json::json_t{wr->get_backlog_bytes()}
-                       : Json::Null{};
-                Json::json_t wr_free =
-                    rx ? Json::json_t {std::filesystem::space(wr_dir).available}
-                       : Json::Null{};
+            // get current POSIX time in seconds
+            const uint64_t time_sec = std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::system_clock::now().time_since_epoch()
+            ).count();
 
-                const auto now = usrp->get_time_now();
-                Json::Object status {{
-                    { "time_ns", (uint64_t) (now.get_full_secs() * 1e9) +
-                                 (uint64_t) (now.get_frac_secs() * 1e9)},
-                    { "rx_seconds", rx_seconds },
-                    { "tx_seconds", tx_seconds },
-                    { "wr_seconds", wr_seconds },
-                    { "wr_backlog", wr_backlog },
-                    { "wr_free", wr_free }
-                }};
-                mqtt->publish("", status.dumps());
+            // publish MQTT topics at the beginning of every second
+            if (time_sec == last_publish_sec) {
+                continue;
+            } else {
+                last_publish_sec = time_sec;
             }
 
+            Json::json_t rx_seconds =
+                rx ? Json::json_t{rx->get_rx_seconds()}
+                    : Json::Null{};
+            Json::json_t tx_seconds =
+                tx ? !tx->is_muted() ? Json::json_t{tx->get_tx_seconds()}
+                                        : Json::json_t{"MUTE"}
+                    : Json::Null{};
+            Json::json_t wr_seconds =
+                wr ? wr->is_running() ? Json::json_t{wr->get_wr_seconds()}
+                                        : Json::json_t{"FAILED"}
+                    : Json::Null{};
+            Json::json_t wr_backlog =
+                wr ? Json::json_t{wr->get_backlog_bytes()}
+                    : Json::Null{};
+            Json::json_t wr_free =
+                rx ? Json::json_t {std::filesystem::space(wr_dir).available}
+                    : Json::Null{};
+
+            const auto now = usrp->get_time_now();
+            Json::Object status {{
+                { "time_ns", (uint64_t) (now.get_full_secs() * 1e9) +
+                                (uint64_t) (now.get_frac_secs() * 1e9)},
+                { "rx_seconds", rx_seconds },
+                { "tx_seconds", tx_seconds },
+                { "wr_seconds", wr_seconds },
+                { "wr_backlog", wr_backlog },
+                { "wr_free", wr_free }
+            }};
+            mqtt->publish("", status.dumps());
+
             // publish samples after status so status data take precedence in SNDBUF
-            if (cfg.mqtt.pub_samples && rx && rx->is_running() && n % 10 == 0) {
+            if (cfg.mqtt.pub_samples && rx && rx->is_running()) {
                 auto ringbufs = rx->get_ringbufs();
                 for (size_t ch = 0; ch < ringbufs.size(); ch++) {
                     auto samps = ringbufs[ch]->get_aligned_samples(cfg.mqtt.pub_samples);
