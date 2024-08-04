@@ -204,8 +204,20 @@ try {
                     usrp->set_rx_antenna(cfg.rx.antenna, ch);
                 usrp->set_rx_bandwidth(cfg.rx.bandwidth, ch);
                 usrp->set_rx_gain(cfg.rx.gain, ch);
-                if (!cfg.rx.lo_source.empty())
+                if (!cfg.rx.lo_source.empty() && !cfg.rx.lo_source.starts_with("twinrx_"))
                     usrp->set_rx_lo_source(cfg.rx.lo_source, uhd::usrp::multi_usrp::ALL_LOS, ch);
+            }
+
+            // TwinRX coherent LO sharing
+            if (cfg.rx.lo_source == "twinrx_shared") {
+                usrp->set_rx_lo_export_enabled(true, uhd::usrp::multi_usrp::ALL_LOS, 0);
+                // NOTE: as of UHD 4.3.0 "reimport" appears broken (noise only)
+                usrp->set_rx_lo_source("internal", uhd::usrp::multi_usrp::ALL_LOS, 0);
+                usrp->set_rx_lo_source("companion", uhd::usrp::multi_usrp::ALL_LOS, 1);
+                usrp->set_rx_lo_source("external", uhd::usrp::multi_usrp::ALL_LOS, 2);
+                usrp->set_rx_lo_source("external", uhd::usrp::multi_usrp::ALL_LOS, 3);
+            } else if (!cfg.rx.lo_source.empty()) {
+                throw generic_error{"invalid rx.lo_source config value: " + cfg.rx.lo_source};
             }
         }
         if (!cfg.tx.subdev.empty()) {
