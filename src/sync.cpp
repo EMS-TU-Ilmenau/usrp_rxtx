@@ -68,6 +68,12 @@ void Sync::sync_gpsdo()
     usrp->set_clock_source("gpsdo");
     usrp->set_time_source("gpsdo");
 
+    // wait for PLL lock
+    // FIXME: not interruptible
+    while (!usrp->get_mboard_sensor("ref_locked").to_bool()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
     if (!usrp->get_mboard_sensor("gps_locked").to_bool())
         logger->log("Synchronizing to unlocked GPSDO.", Log::ERROR);
 
