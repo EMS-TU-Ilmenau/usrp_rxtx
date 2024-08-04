@@ -228,6 +228,7 @@ try {
                             + std::to_string(lost_samples)
                             + ". Terminating.", Log::FATAL);
                 run.store(false, std::memory_order_relaxed);
+                break;
             }
 
             // log zero-padding
