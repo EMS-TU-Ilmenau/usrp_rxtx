@@ -355,8 +355,12 @@ try {
             }};
             mqtt->publish("", status.dumps());
 
-            // publish samples after status so status data take precedence in SNDBUF
+            // delay publishing so slow uplink is not clogged by samples and
+            // other publishers (possibly in other processes) that also align
+            // to full UTC seconds take precedence
             if (cfg.mqtt.pub_samples && rx && rx->is_running()) {
+                // FIXME: sleep_for() temporarily inhibits signal handling
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 auto ringbufs = rx->get_ringbufs();
                 for (size_t ch = 0; ch < ringbufs.size(); ch++) {
                     auto samps = ringbufs[ch]->get_aligned_samples(cfg.mqtt.pub_samples);
