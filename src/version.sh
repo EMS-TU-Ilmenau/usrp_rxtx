@@ -1,4 +1,6 @@
 #!/bin/sh -eu
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (c) 2023-2024 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
 
 if [ -e "$1/.git" ] && git --version >/dev/null 2>&1 ; then
     git_origin=$(git -C "$1" config --get remote.origin.url)

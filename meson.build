@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (c) 2023-2024 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
+
 project('usrp_rxtx', 'cpp',
         default_options : ['cpp_std=c++20', 'warning_level=3',
                            'buildtype=release', 'b_ndebug=if-release'])
