@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2023-2024 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
+// Copyright (c) 2023-2026 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
 
 #include <cerrno>
 #include <csignal>
@@ -75,7 +75,9 @@ try {
     int exit_code = 0;
     try {
         // spawn MQTT client
-        MqttClient::sptr mqtt = std::make_shared<MqttClient>(logger, cfg);
+        MqttClient::sptr mqtt;
+        if (cfg.mqtt.host != "0.0.0.0")
+            mqtt = std::make_shared<MqttClient>(logger, cfg);
 
         // register power management quality-of-service (PM QoS) request with
         // kernel. inhibits certain power mangement features that increase
@@ -295,7 +297,7 @@ try {
                 break;
             }
 
-            if (!mqtt->is_running()) {
+            if (mqtt && !mqtt->is_running()) {
                 logger->log("MQTT client thread stopped unexpectedly. Terminating.",
                             Log::FATAL);
                 exit_code = 1;
@@ -322,7 +324,7 @@ try {
             ).count();
 
             // publish MQTT topics at the beginning of every second
-            if (time_sec == last_publish_sec) {
+            if (!mqtt || time_sec == last_publish_sec) {
                 continue;
             } else {
                 last_publish_sec = time_sec;
