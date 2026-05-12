@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2024 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
+// Copyright (c) 2024-2026 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
 
 #ifndef SYNC_HPP
 #define SYNC_HPP
@@ -22,7 +22,6 @@ public:
     void sync_1pps();
     void sync_host();
     void sync_gpsdo();
-    void sync_b205(const std::filesystem::path& tty_path);
     auto wait_pps() -> uhd::time_spec_t;
 
 private:

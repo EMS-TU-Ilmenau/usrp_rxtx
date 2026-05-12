@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2024 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
+// Copyright (c) 2024-2026 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
 
-#include <csignal>
 #include <thread>
 
 #include "error.hpp"
 #include "sync.hpp"
-#include "tty.hpp"
 
 Sync::Sync(uhd::usrp::multi_usrp::sptr usrp, Logger::sptr logger, const Config& cfg)
     : usrp{usrp}
@@ -94,28 +92,6 @@ void Sync::sync_gpsdo()
     uhd::time_spec_t pps = wait_pps();
 
     logger->log("Set USRP time to: " + std::to_string(pps.get_real_secs()));
-}
-
-void Sync::sync_b205(const std::filesystem::path& tty_path)
-{
-    TTY tty {tty_path, B115200};
-    tty.wr("CLK:MHz");
-    tty.wr("CLK:PPS");
-
-    // switch REF to 1PPS
-    tty.wr("CLK:PPS");
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-
-    // set time at next external PPS pulse and wait for it
-    sync_1pps();
-
-    // switch REF to 10MHz for clock
-    usrp->set_time_source("internal");
-    tty.wr("CLK:MHz");
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-
-    // use external clock
-    sync_10mhz();
 }
 
 auto Sync::wait_pps() -> uhd::time_spec_t
