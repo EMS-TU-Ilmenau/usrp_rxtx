@@ -16,10 +16,6 @@
 #include "error.hpp"
 #include "ringbuf.h"
 
-#ifndef UNLIKELY
-#define UNLIKELY(x) __builtin_expect(x, 0)
-#endif
-
 class ShmMmap {
 public:
     ShmMmap(const std::filesystem::path& path, size_t size);
@@ -92,7 +88,7 @@ public:
         uint64_t head = desc->head.load(std::memory_order_relaxed);
 
         // return empty span if requested data was not yet fully produced
-        if (UNLIKELY(tail + size > head)) {
+        if (tail + size > head) [[unlikely]] {
             return {data, 0};
         }
 
@@ -157,7 +153,7 @@ public:
     auto get_tail(uint64_t tail_nsec) -> uint64_t
     {
         // unable to satisfy tail prior to start of buffer
-        if (UNLIKELY(tail_nsec < desc->start_nsec))
+        if (tail_nsec < desc->start_nsec) [[unlikely]]
             throw generic_error{"requested tail precedes start time of buffer"};
 
         // convert tail from nanoseconds to samples
@@ -166,7 +162,7 @@ public:
         );
 
         // verify tail has not been clobbered by producer already
-        if (UNLIKELY(tail <= desc->clob.load(std::memory_order_relaxed)))
+        if (tail <= desc->clob.load(std::memory_order_relaxed)) [[unlikely]]
             throw generic_error{"requested tail already clobbered"};
 
         return tail;

@@ -124,7 +124,7 @@ try {
     while (run.load(std::memory_order_relaxed)) {
         size_t recv_max_samples = max_num_samps;
         // update buf_ptrs for next uhd::rx_streamer::recv()
-        if (BOOST_LIKELY(contiguous)) {
+        if (contiguous) [[likely]] {
             // recv() contiguous data directly into Ringbufs
             for (size_t n = 0; n < num_channels; n++) {
                 auto span = ringbufs[n]->get_producer_span(max_num_samps);
@@ -145,7 +145,7 @@ try {
         const size_t rcvd_samples = rx->recv(buf_ptrs, recv_max_samples, md, recv_timeout, true);
 
         // error handling
-        if (BOOST_UNLIKELY(rcvd_samples == 0)) {
+        if (rcvd_samples == 0) [[unlikely]] {
             logger->log_uhd_rx_metadata(md);
 
             // see: http://files.ettus.com/manual/structuhd_1_1rx__metadata__t.html
@@ -184,7 +184,7 @@ try {
         // NOTE: some UHD versions (tested with 4.3.0 and 4.6.0) do not set
         //       rx_metadata_t::start_of_burst so additionally rely on
         //       contiguous, which is always false at the beginning of a burst
-        } else if (BOOST_UNLIKELY(md.start_of_burst || !contiguous)) {
+        } else if (md.start_of_burst || !contiguous) [[unlikely]] {
             logger->log_uhd_rx_metadata(md);
         }
 
@@ -202,11 +202,11 @@ try {
         // FIXME: breaks reception if device starts burst prematurely
         assert(ts_samples_packet >= ts_samples_next_recv);
 
-        if (BOOST_LIKELY(contiguous)) {
+        if (contiguous) [[likely]] {
             // verify time specs of contiguous sample packets
             // FIXME: results in one log entry per packet if time specs do mismatch
             /*
-            if (BOOST_UNLIKELY(ts_samples_packet != ts_samples_next_recv)) {
+            if (ts_samples_packet != ts_samples_next_recv) [[unlikely]] {
                 // TODO: implement as Log::RxTimespecMismatch
                 logger->log("Timestamp mismatch: "
                             + std::to_string(ts_samples_packet) + " != "
