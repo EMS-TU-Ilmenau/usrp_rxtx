@@ -181,8 +181,8 @@ try {
             // process next packet
             continue;
         // log first rx_metadata_t of each contiguous block of samples
-        // NOTE: some UHD versions (tested with 4.3.0 and 4.6.0) do not set
-        //       rx_metadata_t::start_of_burst so additionally rely on
+        // NOTE: some UHD versions (tested with 4.3.0, 4.6.0, and 4.9.0) do not
+        //       set rx_metadata_t::start_of_burst so additionally rely on
         //       contiguous, which is always false at the beginning of a burst
         } else if (md.start_of_burst || !contiguous) [[unlikely]] {
             logger->log_uhd_rx_metadata(md);
