@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2024 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
+// Copyright (c) 2024-2026 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
 
 #include <cstdlib>
+#include <format>
 
 extern "C" {
 #ifdef _GNU_SOURCE
@@ -88,41 +89,14 @@ auto Log::Level::to_string_color_fixed() const -> const std::string
 /// @brief convert embedded timestamp to RFC3339-formatted string
 auto Log::Base::time_rfc3339() const -> std::string
 {
-    auto days = std::chrono::floor<std::chrono::days>(time_point);
-    std::chrono::year_month_day date {days};
-    std::chrono::hh_mm_ss time {
-        std::chrono::floor<std::chrono::nanoseconds>(time_point - days)
-    };
-
-    std::ostringstream buf;
-    buf << std::setfill('0')
-        << std::setw(4) << static_cast<int>(date.year())       << '-'
-        << std::setw(2) << static_cast<unsigned>(date.month()) << '-'
-        << std::setw(2) << static_cast<unsigned>(date.day())   << 'T'
-        << std::setw(2) << time.hours().count()                << ':'
-        << std::setw(2) << time.minutes().count()              << ':'
-        << std::setw(2) << time.seconds().count()              << '.'
-        << std::setw(9) << time.subseconds().count()           << 'Z';
-
-    return buf.str();
+    return std::format("{:%Y-%m-%dT%H:%M:%S}Z", time_point);
 }
 
 /// @brief convert embedded timestamp to short time-only string
 auto Log::Base::time_short() const -> std::string
 {
-    auto days = std::chrono::floor<std::chrono::days>(time_point);
-    std::chrono::hh_mm_ss time {
-        std::chrono::floor<std::chrono::microseconds>(time_point - days)
-    };
-
-    std::ostringstream buf;
-    buf << std::setfill('0')
-        << std::setw(2) << time.hours().count()                << ':'
-        << std::setw(2) << time.minutes().count()              << ':'
-        << std::setw(2) << time.seconds().count()              << '.'
-        << std::setw(6) << time.subseconds().count()           << 'Z';
-
-    return buf.str();
+    auto truncated = std::chrono::floor<std::chrono::microseconds>(time_point);
+    return std::format("{:%H:%M:%S}Z", truncated);
 }
 
 /// @brief convert embedded timestamp to nanoseconds since POSIX epoch
@@ -145,7 +119,7 @@ void Log::Misc::serialize(std::ostream& console, std::ostream& logfile) const
             << msg << std::endl;
 
     Json::Object{{
-        { "_time", std::move(time_rfc3339()) },
+        { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
         { "_type", Json::Null{} },
@@ -171,7 +145,7 @@ void Log::Exception::serialize(std::ostream& console, std::ostream& logfile) con
             << ": Exception: " << what << std::endl;
 
     Json::Object{{
-        { "_time", std::move(time_rfc3339()) },
+        { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
         { "_type", "exception" },
@@ -190,7 +164,7 @@ void Log::Exit::serialize(std::ostream& console, std::ostream& logfile) const
             << exit_code << '.' << std::endl;
 
     Json::Object{{
-        { "_time", std::move(time_rfc3339()) },
+        { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
         { "_type", "exit" },
@@ -208,7 +182,7 @@ void Log::RxZeropad::serialize(std::ostream& console, std::ostream& logfile) con
             << std::endl;
 
     Json::Object{{
-        { "_time", std::move(time_rfc3339()) },
+        { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
         { "_type", "rx_zeropad" },
@@ -228,7 +202,7 @@ void Log::UhdLogInfo::serialize(std::ostream& console, std::ostream& logfile) co
     }
 
     Json::Object{{
-        { "_time", std::move(time_rfc3339()) },
+        { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", Log::Level{info.verbosity}.to_string() },
         { "_type", "uhd" },
@@ -284,7 +258,7 @@ void Log::UhdAsyncMetadata::serialize(std::ostream& console, std::ostream& logfi
             << ": async_metadata_t: " << obj.dumps() << std::endl;
 
     Json::Object{{
-        { "_time", std::move(time_rfc3339()) },
+        { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
         { "_type", "async_metadata" },
@@ -344,7 +318,7 @@ void Log::UhdRxMetadata::serialize(std::ostream& console, std::ostream& logfile)
             << ": rx_metadata_t: " << obj.dumps() << std::endl;
 
     Json::Object{{
-        { "_time", std::move(time_rfc3339()) },
+        { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
         { "_type", "rx_metadata" },
@@ -393,7 +367,7 @@ void Log::UhdStreamCmd::serialize(std::ostream& console, std::ostream& logfile) 
             << ": stream_cmd_t: " << obj.dumps() << std::endl;
 
     Json::Object{{
-        { "_time", std::move(time_rfc3339()) },
+        { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
         { "_type", "rx_stream_cmd" },
@@ -421,7 +395,7 @@ void Log::UhdTxMetadata::serialize(std::ostream& console, std::ostream& logfile)
             << ": tx_metadata_t: " << obj.dumps() << std::endl;
 
     Json::Object{{
-        { "_time", std::move(time_rfc3339()) },
+        { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
         { "_type", "tx_metadata" },
@@ -462,7 +436,7 @@ void Log::UsrpChannels::serialize(std::ostream& console, std::ostream& logfile) 
     }
 
     Json::Object{{
-        { "_time", std::move(time_rfc3339()) },
+        { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", Log::INFO.to_string() },
         { "_type", "channels" },
@@ -517,7 +491,7 @@ void Log::UsrpHardware::serialize(std::ostream& console, std::ostream& logfile) 
     }
 
     Json::Object{{
-        { "_time", std::move(time_rfc3339()) },
+        { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", Log::INFO.to_string() },
         { "_type", "hardware" },
@@ -530,6 +504,9 @@ void Log::UsrpHardware::serialize(std::ostream& console, std::ostream& logfile) 
 
 void Log::WrOpen::serialize(std::ostream& console, std::ostream& logfile) const
 {
+    using namespace std::chrono;
+    using ns_clock = std::chrono::time_point<system_clock, nanoseconds>;
+
     console << time_short() << ' '
             << std::right << std::setw(5) << level.to_string_color_fixed()
             << ": Writing file " << path.generic_string()
@@ -537,12 +514,16 @@ void Log::WrOpen::serialize(std::ostream& console, std::ostream& logfile) const
             << std::endl;
 
     Json::Object{{
-        { "_time", std::move(time_rfc3339()) },
+        { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
         { "_type", "wr_open" },
         { "file", path.generic_string() },
-        { "offset", offset }
+        { "time_start", std::format("{:%Y-%m-%dT%H:%M:%S}Z",
+            ns_clock{nanoseconds{start_ns}})
+        },
+        { "time_start_ns", start_ns },
+        { "offset_samples", offset }
     }}.dump(&logfile);
     logfile << '\n';
 }

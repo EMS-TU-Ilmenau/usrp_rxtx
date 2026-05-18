@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2024 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
+// Copyright (c) 2024-2026 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
 
 #ifndef LOGGING_HPP
 #define LOGGING_HPP
@@ -214,15 +214,17 @@ namespace Log {
 
     class WrOpen : public Base {
     public:
-        WrOpen(const std::filesystem::path& path, const uint64_t offset)
+        WrOpen(const std::filesystem::path& path, const uint64_t start_ns, const uint64_t offset)
             : Base{INFO}
             , path{path}
+            , start_ns{start_ns}
             , offset{offset}
         {};
         void serialize(std::ostream& console, std::ostream& logfile) const;
 
     protected:
         std::filesystem::path path;
+        uint64_t start_ns;
         uint64_t offset;
     };
 }
@@ -306,9 +308,9 @@ public:
         cond_var.notify_one();
     };
 
-    void log_wr_open(const std::filesystem::path& path, const uint64_t offset)
+    void log_wr_open(const std::filesystem::path& path, const uint64_t start_ns, const uint64_t offset)
     {
-        queue.push(Log::WrOpen{path, offset});
+        queue.push(Log::WrOpen{path, start_ns, offset});
         cond_var.notify_one();
     };
 

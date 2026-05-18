@@ -50,8 +50,8 @@ Wr::Wr(std::vector<Ringbuf<sample_t>::sptr>&& _ringbufs,
                 throw syscall_error{"open(\"" + path.generic_string() + "\", ...) failed"};
             fds.push_back(fd);
 
-            // log file path and Ringbuf offset
-            logger->log_wr_open(path, tails[ch]);
+            // log file path, start time, and Ringbuf offset
+            logger->log_wr_open(path, start_nsec, tails[ch]);
         }
     } catch (...) {
         // close all opened fds and rethrow exception
