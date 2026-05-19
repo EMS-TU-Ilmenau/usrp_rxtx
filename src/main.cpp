@@ -235,7 +235,7 @@ try {
         // log USRP hardware and channel configuration
         logger->log_usrp_hardware(usrp);
         logger->log_usrp_channels(usrp);
-        logger->log("Initialization succeeded.");
+        logger->log("Initialization complete.");
 
         // start Rx and Tx threads
         Rx::sptr rx;

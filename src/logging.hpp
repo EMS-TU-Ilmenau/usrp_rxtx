@@ -202,7 +202,7 @@ namespace Log {
     class UhdTxMetadata : public Base {
     public:
         UhdTxMetadata(const uhd::tx_metadata_t& tx_meta)
-            : Base{DEBUG}
+            : Base{tx_meta.start_of_burst || tx_meta.end_of_burst ? INFO : DEBUG}
             , tx_meta{tx_meta}
         {};
         void serialize(std::ostream& console, std::ostream& logfile) const;

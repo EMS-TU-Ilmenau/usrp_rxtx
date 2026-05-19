@@ -48,7 +48,8 @@ Tx::Tx(uhd::usrp::multi_usrp::sptr usrp, Logger::sptr logger, const Config& cfg)
 
     // log number of samples read from file
     std::stringstream msg;
-    msg << "Read " << tx_signal.size() << " samples from file " << cfg.tx.file << '.';
+    msg << "Tx signal loaded from file " << std::quoted(cfg.tx.file)
+        << " (" << tx_signal.size() << " samples).";
     logger->log(msg.str(), Log::DEBUG);
 
     // spawn worker
