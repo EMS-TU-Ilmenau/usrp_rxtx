@@ -31,11 +31,8 @@ Tx::Tx(uhd::usrp::multi_usrp::sptr usrp, Logger::sptr logger, const Config& cfg)
     , logger{logger}
     , sample_rate_hz{usrp->get_tx_rate()}
 {
-    // TODO: implement support for multiple Tx channels
-    if (usrp->get_tx_num_channels() != 1)
-        throw std::invalid_argument{"Tx supports single channel operation only"};
-
     // read sample file into buffer
+    // TODO: separate file for each Tx channel
     size_t tx_samples = std::filesystem::file_size(cfg.tx.file) / sizeof(sample_t);
     std::vector<sample_t> tx_signal(tx_samples);
     std::ifstream file {cfg.tx.file, std::ios_base::in | std::ios_base::binary};
@@ -87,11 +84,14 @@ try {
     static_assert(std::is_same<sample_t, std::complex<int16_t>>::value);
     uhd::stream_args_t stream_args {"sc16", "sc16"};
     stream_args.args["underflow_policy"] = "next_burst";
-    stream_args.channels = std::vector<size_t> {0};
+    stream_args.channels = std::vector<size_t> {};
+    for (size_t n = 0; n < usrp->get_tx_num_channels(); n++)
+        stream_args.channels.push_back(n);
     uhd::tx_streamer::sptr tx = usrp->get_tx_stream(stream_args);
 
     // retrieve streaming parameters
     const uint64_t rate_hz = this->sample_rate_hz;
+    const size_t num_channels = tx->get_num_channels();
     const uint64_t samps_per_frame = tx->get_max_num_samps();
 
     // tx_signal contains a single period of the transmit signal. create a
@@ -102,7 +102,7 @@ try {
     }
 
     /// buffer pointers for uhd::tx_streamer::send()
-    std::vector<const void *> buf_ptrs {tx->get_num_channels()};
+    std::vector<const void *> buf_ptrs {num_channels};
 
     /// successfully transmitted samples in this burst (0 := start of burst)
     uint64_t samples_burst = 0;
@@ -119,8 +119,9 @@ try {
         }
 
         // update pointers into sendbuf to ensure signal periodicity
-        // TODO: implement multi-channel support
-        buf_ptrs[0] = &sendbuf[samples_burst % tx_signal.size()];
+        // TODO: separate sequence for each Tx channel
+        for (size_t n = 0; n < num_channels; n++)
+            buf_ptrs[n] = &sendbuf[samples_burst % tx_signal.size()];
 
         // stream buffer to USRP
         size_t num_tx_samps = tx->send(buf_ptrs, FRAMES_PER_SEND * samps_per_frame, tx_md, 1.);

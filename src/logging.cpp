@@ -253,7 +253,8 @@ void Log::UhdAsyncMetadata::serialize(std::ostream& console, std::ostream& logfi
     }
 
     console << time_short() << ' ' << level.to_string_color_fixed()
-            << ": Tx async event " << event << " occurred"
+            << ": Tx async event " << event << " occurred "
+            << "on channel " << async_meta.channel
             << (async_meta.has_time_spec ? " at " : "")
             << (async_meta.has_time_spec ? timespec_to_str(async_meta.time_spec) : "")
             << '.' << std::endl;
@@ -264,6 +265,7 @@ void Log::UhdAsyncMetadata::serialize(std::ostream& console, std::ostream& logfi
         { "_level", level.to_string() },
         { "_type", "async_metadata" },
         { "event_code", event_code },
+        { "channel", async_meta.channel },
         { "has_time_spec", async_meta.has_time_spec },
         { "time_spec", (uint64_t) (async_meta.time_spec.get_full_secs() * 1e9) +
                        (uint64_t) (async_meta.time_spec.get_frac_secs() * 1e9) },
