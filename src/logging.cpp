@@ -380,6 +380,37 @@ void Log::UhdStreamCmd::serialize(std::ostream& console, std::ostream& logfile) 
     logfile << '\n';
 }
 
+void Log::UhdTuneResult::serialize(std::ostream& console, std::ostream& logfile) const
+{
+    Json::Object obj {{
+        { "clipped_rf_freq", tune_res.clipped_rf_freq },
+        { "target_rf_freq", tune_res.target_rf_freq },
+        { "actual_rf_freq", tune_res.actual_rf_freq },
+        { "target_dsp_freq", tune_res.target_dsp_freq },
+        { "actual_dsp_freq", tune_res.actual_dsp_freq }
+    }};
+
+    console << time_short() << ' '
+            << std::right << std::setw(5) << level.to_string_color_fixed()
+            << (path == Path::RX ? ": Rx channel " : ": Tx channel ") << chan
+            << " RF tune result: " << obj.dumps() << std::endl;
+
+    Json::Object{{
+        { "_time", time_rfc3339() },
+        { "_time_ns", time_epoch_ns() },
+        { "_level", level.to_string() },
+        { "_type", "tune_result" },
+        { "path", path == Path::RX ? "rx" : "tx" },
+        { "channel", chan },
+        { "clipped_rf_freq", tune_res.clipped_rf_freq },
+        { "target_rf_freq", tune_res.target_rf_freq },
+        { "actual_rf_freq", tune_res.actual_rf_freq },
+        { "target_dsp_freq", tune_res.target_dsp_freq },
+        { "actual_dsp_freq", tune_res.actual_dsp_freq }
+    }}.dump(&logfile);
+    logfile << '\n';
+}
+
 void Log::UhdTxMetadata::serialize(std::ostream& console, std::ostream& logfile) const
 {
     Json::Object obj {{
@@ -418,6 +449,7 @@ void Log::UsrpChannels::serialize(std::ostream& console, std::ostream& logfile) 
         chans_rx.emplace_back(Json::Object{{
             { "antenna", usrp->get_rx_antenna(chan) },
             { "bandwidth", usrp->get_rx_bandwidth(chan) },
+            { "frequency", usrp->get_rx_freq(chan) },
             { "gain", usrp->get_rx_gain(chan) },
             { "lo_source", usrp->get_rx_lo_source(uhd::usrp::multi_usrp::ALL_LOS, chan) },
             { "rate", usrp->get_rx_rate(chan) }
@@ -429,6 +461,7 @@ void Log::UsrpChannels::serialize(std::ostream& console, std::ostream& logfile) 
         chans_tx.emplace_back(Json::Object{{
             { "antenna", usrp->get_tx_antenna(chan) },
             { "bandwidth", usrp->get_tx_bandwidth(chan) },
+            { "frequency", usrp->get_rx_freq(chan) },
             { "gain", usrp->get_tx_gain(chan) },
             { "lo_source", usrp->get_tx_lo_source(uhd::usrp::multi_usrp::ALL_LOS, chan) },
             { "rate", usrp->get_tx_rate(chan) }

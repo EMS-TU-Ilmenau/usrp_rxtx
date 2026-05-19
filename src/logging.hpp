@@ -16,6 +16,8 @@
 #include <string>
 #include <thread>
 #include <tuple>
+#include <uhd/types/tune_request.hpp>
+#include <uhd/types/tune_result.hpp>
 #include <variant>
 
 #include <uhd/usrp/multi_usrp.hpp>
@@ -176,6 +178,27 @@ namespace Log {
         uhd::stream_cmd_t stream_cmd;
     };
 
+    class UhdTuneResult : public Base {
+    public:
+        enum Path { RX, TX };
+
+        UhdTuneResult(const uhd::tune_result_t& tune_res, Path path, size_t chan)
+            : Base{tune_res.clipped_rf_freq == tune_res.target_rf_freq &&
+                   tune_res.actual_rf_freq  == tune_res.target_rf_freq &&
+                   tune_res.actual_dsp_freq == tune_res.target_dsp_freq
+                   ? INFO : ERROR}
+            , tune_res{tune_res}
+            , path{path}
+            , chan{chan}
+        {};
+        void serialize(std::ostream& console, std::ostream& logfile) const;
+
+    protected:
+        uhd::tune_result_t tune_res;
+        Path path;
+        size_t chan;
+    };
+
     class UhdTxMetadata : public Base {
     public:
         UhdTxMetadata(const uhd::tx_metadata_t& tx_meta)
@@ -302,6 +325,18 @@ public:
         cond_var.notify_one();
     };
 
+    void log_uhd_tune_result_rx(const uhd::tune_result_t& tune_res, size_t chan)
+    {
+        queue.push(Log::UhdTuneResult{tune_res, Log::UhdTuneResult::RX, chan});
+        cond_var.notify_one();
+    };
+
+    void log_uhd_tune_result_tx(const uhd::tune_result_t& tune_res, size_t chan)
+    {
+        queue.push(Log::UhdTuneResult{tune_res, Log::UhdTuneResult::TX, chan});
+        cond_var.notify_one();
+    };
+
     void log_uhd_tx_metadata(const uhd::tx_metadata_t& tx_meta)
     {
         queue.push(Log::UhdTxMetadata{tx_meta});
@@ -339,6 +374,7 @@ private:
                       Log::UhdAsyncMetadata,
                       Log::UhdRxMetadata,
                       Log::UhdStreamCmd,
+                      Log::UhdTuneResult,
                       Log::UhdTxMetadata,
                       Log::UsrpChannels,
                       Log::UsrpHardware,

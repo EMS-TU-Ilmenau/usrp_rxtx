@@ -166,7 +166,7 @@ try {
 
             for (size_t ch = 0; ch < usrp->get_rx_num_channels(); ch++) {
                 uhd::tune_result_t tune_res = usrp->set_rx_freq(tune_req, ch);
-                logger->log(tune_res.to_pp_string(), Log::DEBUG);
+                logger->log_uhd_tune_result_rx(tune_res, ch);
             }
 
             // wait for all local oscillators to lock
@@ -187,7 +187,7 @@ try {
 
             for (size_t ch = 0; ch < usrp->get_tx_num_channels(); ch++) {
                 uhd::tune_result_t tune_res = usrp->set_tx_freq(tune_req, ch);
-                logger->log(tune_res.to_pp_string(), Log::DEBUG);
+                logger->log_uhd_tune_result_tx(tune_res, ch);
             }
 
             // wait for all local oscillators to lock
@@ -235,6 +235,7 @@ try {
         // log USRP hardware and channel configuration
         logger->log_usrp_hardware(usrp);
         logger->log_usrp_channels(usrp);
+        logger->log("Initialization succeeded.");
 
         // start Rx and Tx threads
         Rx::sptr rx;
@@ -247,8 +248,6 @@ try {
         // prepare file writing
         Wr::sptr wr;
         std::filesystem::path wr_dir = cfg.wr.directory;
-
-        logger->log("Initialization succeeded.");
 
         /// time of last MQTT status publication in seconds since POSIX epoch
         uint64_t last_publish_sec = 0;
