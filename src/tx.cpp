@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2024 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
+// Copyright (c) 2024-2026 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
 
-#include <algorithm>
 #include <cstring>
 #include <type_traits>
 
@@ -9,7 +8,9 @@ extern "C" {
 #ifdef _GNU_SOURCE
     #include <pthread.h>
 #endif
+#if _POSIX_C_SOURCE >= 200112L
     #include <sched.h>
+#endif
 }
 
 #include <uhd/usrp/multi_usrp.hpp>
@@ -18,15 +19,12 @@ extern "C" {
 #include "tx.hpp"
 
 /// minimal number of frames to coalesce per tx_stream_t::send() call
-#define FRAMES_PER_SEND 128
-
-/// seconds to wait for EVENT_CODE_BURST_ACK after sending end-of-burst
-// FIXME: May be too short for very low sample rates and is way too long for
-//        high sample rates. Timeout should be sample rate dependent.
-#define TIMEOUT_BURST_ACK 2.
+// TODO: make this tunable run-time configurable
+static constexpr size_t FRAMES_PER_SEND = 128;
 
 /// delay in seconds of start-of-burst timestamp after it's sent
-#define BURST_HOLDOFF 0.01
+// TODO: make this tunable run-time configurable
+static constexpr double BURST_DELAY = 0.01;
 
 Tx::Tx(uhd::usrp::multi_usrp::sptr usrp, Logger::sptr logger, const Config& cfg)
     : usrp{usrp}
@@ -66,7 +64,7 @@ Tx::~Tx()
 
 /// round up time_spec_t to signal period
 static inline uhd::time_spec_t
-align_time(const uhd::time_spec_t& ts, double holdoff_sec,
+align_time(const uhd::time_spec_t& ts, double delay_sec,
            double sample_rate_hz, size_t period_samples);
 
 void Tx::worker(std::vector<sample_t>&& tx_signal)
@@ -75,12 +73,14 @@ try {
     pthread_setname_np(pthread_self(), "tx");
 #endif
 
-    // set realtime priorioty
+#if _POSIX_C_SOURCE >= 200112L
+    // set realtime priority
     const struct sched_param param = {
         .sched_priority = 99
     };
     if (sched_setscheduler(0, SCHED_FIFO, &param) == -1)
         throw syscall_error{"sched_setscheduler() failed"};
+#endif
 
     // setup Tx streamer
     static_assert(std::is_same<sample_t, std::complex<int16_t>>::value);
@@ -107,13 +107,12 @@ try {
     uint64_t samples_burst = 0;
     uhd::tx_metadata_t tx_md;
     while (run.load(std::memory_order_relaxed)) {
-        //
-        if (BOOST_UNLIKELY(samples_burst == 0)) {
+        if (samples_burst == 0) [[unlikely]] {
             tx_md.has_time_spec  = true;
             tx_md.start_of_burst = true;
             tx_md.end_of_burst   = false;
-            tx_md.time_spec      = align_time(usrp->get_time_now(), BURST_HOLDOFF, rate_hz,
-                                        tx_signal.size());
+            tx_md.time_spec      = align_time(usrp->get_time_now(), BURST_DELAY,
+                                              rate_hz, tx_signal.size());
 
             logger->log_uhd_tx_metadata(tx_md);
         }
@@ -135,7 +134,7 @@ try {
 
         // check for async errors and restart burst if at least one occurred
         uhd::async_metadata_t async_md;
-        while (tx->recv_async_msg(async_md, 0.)) {
+        while (tx->recv_async_msg(async_md, 0.)) [[unlikely]] {
             // log all received async_metadata_t
             logger->log_uhd_async_metadata(async_md);
 
@@ -160,14 +159,17 @@ try {
         burst_samples.store(samples_burst, std::memory_order_relaxed);
 
         // If a streaming error occurred (e.g., buffer underflow or packet loss),
-        // the USRP does not ensure coherent sampling by zeropadding lost
+        // the USRP does not ensure coherent sampling by zero padding lost
         // samples and discarding late samples. The only way to mitigate that
         // and to ensure coherent Tx sample streaming is to stop the burst after
-        // an error occured and to start a new burst with an appropriately set
+        // an error occurred and to start a new burst with an appropriately set
         // time_spec.
 
         // stop burst on error or when muting/termination was requested
-        if (!samples_burst || mute || !run) {
+        if (!samples_burst ||
+            mute.load(std::memory_order_relaxed) ||
+            !run.load(std::memory_order_relaxed)
+        ) [[unlikely]] {
             // send a mini end-of-burst (EOB) packet without any sample payload
             tx_md.has_time_spec  = false;
             tx_md.start_of_burst = false;
@@ -215,17 +217,17 @@ try {
 
 /// round up time_spec_t to signal period
 static inline uhd::time_spec_t
-align_time(const uhd::time_spec_t& ts, double holdoff_sec,
+align_time(const uhd::time_spec_t& ts, double delay_sec,
            double sample_rate_hz, size_t period_samples)
 {
     uint64_t sample_rate_hz_int  = sample_rate_hz;
     double   sample_rate_hz_frac = sample_rate_hz - sample_rate_hz_int;
 
     if (sample_rate_hz_frac == 0.) {
-        // convert time_spec_t + holdoff into number of samples since unix epoch
-        uint64_t samples = ts.get_full_secs() * sample_rate_hz_int
+        // convert time_spec_t + delay into number of samples since unix epoch
+        uint64_t samples = (uint64_t) (ts.get_full_secs() * sample_rate_hz_int)
                          + (uint64_t) (ts.get_frac_secs() * sample_rate_hz_int)
-                         + (uint64_t) (sample_rate_hz * holdoff_sec);
+                         + (uint64_t) (sample_rate_hz * delay_sec);
 
         // align sample count to next multiple of signal period
         samples = (samples + period_samples - 1)
