@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2024 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
+// Copyright (c) 2024-2026 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
 
 #ifndef RINGBUF_HPP
 #define RINGBUF_HPP
@@ -11,7 +11,6 @@
 #include <memory>
 #include <span>
 #include <string>
-#include <thread>
 
 #include "error.hpp"
 #include "ringbuf.h"

@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2024 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
+// Copyright (c) 2024-2026 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
 
-#include <cerrno>
-#include <csignal>
 #include <cstdlib>
 #include <cstring>
-#include <exception>
-#include <system_error>
 
 extern "C" {
     #include <fcntl.h>

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2023-2024 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
+// Copyright (c) 2023-2026 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
 
+#include <charconv>
 #include <fstream>
-#include <sstream>
 
 #include "config.hpp"
 #include "error.hpp"

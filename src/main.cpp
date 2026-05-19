@@ -19,7 +19,6 @@ extern "C" {
 #include "error.hpp"
 #include "logging.hpp"
 #include "mqtt.hpp"
-#include "ringbuf.hpp"
 #include "rx.hpp"
 #include "sync.hpp"
 #include "tx.hpp"
@@ -60,7 +59,7 @@ try {
 
     // spawn Logger
     Logger::sptr logger = std::make_shared<Logger>(
-        "usrp_rxtx_" + hostname + "_" + cfg.usrp.args, std::move(cfg.to_json()));
+        "usrp_rxtx_" + hostname + "_" + cfg.usrp.args, cfg.to_json());
     logger->log("Initializing ...", Log::INFO);
 
     // set up UHD logging

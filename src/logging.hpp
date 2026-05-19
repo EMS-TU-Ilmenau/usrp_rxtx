@@ -11,11 +11,9 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
-#include <optional>
 #include <source_location>
 #include <string>
 #include <thread>
-#include <tuple>
 #include <uhd/types/tune_request.hpp>
 #include <uhd/types/tune_result.hpp>
 #include <variant>
