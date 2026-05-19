@@ -126,18 +126,16 @@ void Log::Null::serialize(std::ostream& console, std::ostream& logfile) const
 
 void Log::Misc::serialize(std::ostream& console, std::ostream& logfile) const
 {
-    console << time_short() << ' '
-            << std::right << std::setw(5) << level.to_string_color_fixed() << ": "
+    console << time_short() << ' ' << level.to_string_color_fixed() << ": "
             << msg << std::endl;
 
-    Json::Object{{
+    logfile << Json::Object{{
         { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
         { "_type", Json::Null{} },
         { "message", msg }
-    }}.dump(&logfile);
-    logfile << '\n';
+    }} << '\n';
 }
 
 void Log::Exception::serialize(std::ostream& console, std::ostream& logfile) const
@@ -152,56 +150,50 @@ void Log::Exception::serialize(std::ostream& console, std::ostream& logfile) con
         what = "Unknown exception";
     }
 
-    console << time_short() << ' '
-            << std::right << std::setw(5) << level.to_string_color_fixed()
+    console << time_short() << ' ' << level.to_string_color_fixed()
             << ": Exception: " << what << std::endl;
 
-    Json::Object{{
+    logfile << Json::Object{{
         { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
         { "_type", "exception" },
         { "what", std::move(what) }
-    }}.dump(&logfile);
-    logfile << '\n';
+    }} << '\n';
 }
 
 void Log::Exit::serialize(std::ostream& console, std::ostream& logfile) const
 {
-    console << time_short() << ' '
-            << std::right << std::setw(5) << level.to_string_color_fixed()
+    console << time_short() << ' ' << level.to_string_color_fixed()
             << (exit_code == 0
                     ? ": Exiting successfully with exit code "
                     : ": Exiting abnormally with exit code ")
             << exit_code << '.' << std::endl;
 
-    Json::Object{{
+    logfile << Json::Object{{
         { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
         { "_type", "exit" },
         { "exit_code", exit_code }
-    }}.dump(&logfile);
-    logfile << '\n';
+    }} << '\n';
 }
 
 void Log::RxZeropad::serialize(std::ostream& console, std::ostream& logfile) const
 {
-    console << time_short() << ' '
-            << std::right << std::setw(5) << level.to_string_color_fixed()
+    console << time_short() << ' ' << level.to_string_color_fixed()
             << ": Zero padding " << samples
             << " samples at ring buffer offset " << offset << " samples."
             << std::endl;
 
-    Json::Object{{
+    logfile << Json::Object{{
         { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
         { "_type", "rx_zeropad" },
         { "offset", offset },
         { "samples", samples }
-    }}.dump(&logfile);
-    logfile << '\n';
+    }} << '\n';
 }
 
 void Log::UhdLogInfo::serialize(std::ostream& console, std::ostream& logfile) const
@@ -213,15 +205,14 @@ void Log::UhdLogInfo::serialize(std::ostream& console, std::ostream& logfile) co
                 << info.message << std::endl;
     }
 
-    Json::Object{{
+    logfile << Json::Object{{
         { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", Log::Level{info.verbosity}.to_string() },
         { "_type", "uhd" },
         { "component", info.component },
         { "message", info.message }
-    }}.dump(&logfile);
-    logfile << '\n';
+    }} << '\n';
 }
 
 void Log::UhdAsyncMetadata::serialize(std::ostream& console, std::ostream& logfile) const
@@ -268,7 +259,7 @@ void Log::UhdAsyncMetadata::serialize(std::ostream& console, std::ostream& logfi
             << (async_meta.has_time_spec ? timespec_to_str(async_meta.time_spec) : "")
             << '.' << std::endl;
 
-    Json::Object{{
+    logfile << Json::Object{{
         { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
@@ -281,8 +272,7 @@ void Log::UhdAsyncMetadata::serialize(std::ostream& console, std::ostream& logfi
             (uint64_t) async_meta.user_payload[0], (uint64_t) async_meta.user_payload[1],
             (uint64_t) async_meta.user_payload[2], (uint64_t) async_meta.user_payload[3]
         }}}
-    }}.dump(&logfile);
-    logfile << '\n';
+    }} << '\n';
 }
 
 void Log::UhdRxMetadata::serialize(std::ostream& console, std::ostream& logfile) const
@@ -338,7 +328,7 @@ void Log::UhdRxMetadata::serialize(std::ostream& console, std::ostream& logfile)
                 << '.' << std::endl;
     }
 
-    Json::Object{{
+    logfile << Json::Object{{
         { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
@@ -350,8 +340,7 @@ void Log::UhdRxMetadata::serialize(std::ostream& console, std::ostream& logfile)
         { "has_time_spec", rx_meta.has_time_spec },
         { "time_spec", (uint64_t) (rx_meta.time_spec.get_full_secs() * 1e9) +
                        (uint64_t) (rx_meta.time_spec.get_frac_secs() * 1e9) }
-    }}.dump(&logfile);
-    logfile << '\n';
+    }} << '\n';
 }
 
 void Log::UhdStreamCmd::serialize(std::ostream& console, std::ostream& logfile) const
@@ -401,7 +390,7 @@ void Log::UhdStreamCmd::serialize(std::ostream& console, std::ostream& logfile) 
         break;
     }
 
-    Json::Object{{
+    logfile << Json::Object{{
         { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
@@ -411,8 +400,7 @@ void Log::UhdStreamCmd::serialize(std::ostream& console, std::ostream& logfile) 
         { "stream_now", stream_cmd.stream_now },
         { "time_spec", (uint64_t) (stream_cmd.time_spec.get_full_secs() * 1e9) +
                        (uint64_t) (stream_cmd.time_spec.get_frac_secs() * 1e9) }
-    }}.dump(&logfile);
-    logfile << '\n';
+    }} << '\n';
 }
 
 void Log::UhdTuneResult::serialize(std::ostream& console, std::ostream& logfile) const
@@ -425,12 +413,11 @@ void Log::UhdTuneResult::serialize(std::ostream& console, std::ostream& logfile)
         { "actual_dsp_freq", tune_res.actual_dsp_freq }
     }};
 
-    console << time_short() << ' '
-            << std::right << std::setw(5) << level.to_string_color_fixed()
+    console << time_short() << ' ' << level.to_string_color_fixed()
             << (path == Path::RX ? ": Tuned Rx channel " : ": Tuned Tx channel ") << chan
-            << ": " << obj.dumps() << std::endl;
+            << ": " << obj << std::endl;
 
-    Json::Object{{
+    logfile << Json::Object{{
         { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
@@ -442,8 +429,7 @@ void Log::UhdTuneResult::serialize(std::ostream& console, std::ostream& logfile)
         { "actual_rf_freq", tune_res.actual_rf_freq },
         { "target_dsp_freq", tune_res.target_dsp_freq },
         { "actual_dsp_freq", tune_res.actual_dsp_freq }
-    }}.dump(&logfile);
-    logfile << '\n';
+    }} << '\n';
 }
 
 void Log::UhdTxMetadata::serialize(std::ostream& console, std::ostream& logfile) const
@@ -457,7 +443,7 @@ void Log::UhdTxMetadata::serialize(std::ostream& console, std::ostream& logfile)
                 << '.' << std::endl;
     }
 
-    Json::Object{{
+    logfile << Json::Object{{
         { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
@@ -467,8 +453,7 @@ void Log::UhdTxMetadata::serialize(std::ostream& console, std::ostream& logfile)
         { "has_time_spec", tx_meta.has_time_spec },
         { "time_spec", (uint64_t) (tx_meta.time_spec.get_full_secs() * 1e9) +
                        (uint64_t) (tx_meta.time_spec.get_frac_secs() * 1e9) }
-    }}.dump(&logfile);
-    logfile << '\n';
+    }} << '\n';
 }
 
 void Log::UsrpChannels::serialize(std::ostream& console, std::ostream& logfile) const
@@ -500,15 +485,14 @@ void Log::UsrpChannels::serialize(std::ostream& console, std::ostream& logfile) 
         }});
     }
 
-    Json::Object{{
+    logfile << Json::Object{{
         { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", Log::INFO.to_string() },
         { "_type", "channels" },
         { "rx", std::move(chans_rx) },
         { "tx", std::move(chans_tx) },
-    }}.dump(&logfile);
-    logfile << '\n';
+    }} << '\n';
 }
 
 void Log::UsrpHardware::serialize(std::ostream& console, std::ostream& logfile) const
@@ -555,7 +539,7 @@ void Log::UsrpHardware::serialize(std::ostream& console, std::ostream& logfile) 
         info_tx.emplace_back(info);
     }
 
-    Json::Object{{
+    logfile << Json::Object{{
         { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", Log::INFO.to_string() },
@@ -563,8 +547,7 @@ void Log::UsrpHardware::serialize(std::ostream& console, std::ostream& logfile) 
         { "motherboards", std::move(info_mboard) },
         { "daughterboards_rx", std::move(info_rx) },
         { "daughterboards_tx", std::move(info_tx) },
-    }}.dump(&logfile);
-    logfile << '\n';
+    }} << '\n';
 }
 
 void Log::WrOpen::serialize(std::ostream& console, std::ostream& logfile) const
@@ -572,13 +555,12 @@ void Log::WrOpen::serialize(std::ostream& console, std::ostream& logfile) const
     using namespace std::chrono;
     using ns_clock = std::chrono::time_point<system_clock, nanoseconds>;
 
-    console << time_short() << ' '
-            << std::right << std::setw(5) << level.to_string_color_fixed()
-            << ": Writing file " << path.generic_string()
+    console << time_short() << ' ' << level.to_string_color_fixed()
+            << ": Writing file " << std::quoted(path.generic_string())
             << " from ring buffer offset " << offset << " samples."
             << std::endl;
 
-    Json::Object{{
+    logfile << Json::Object{{
         { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
@@ -589,8 +571,7 @@ void Log::WrOpen::serialize(std::ostream& console, std::ostream& logfile) const
         },
         { "time_start_ns", start_ns },
         { "offset_samples", offset }
-    }}.dump(&logfile);
-    logfile << '\n';
+    }} << '\n';
 }
 
 Logger::Logger(const std::filesystem::path& path_prefix, Json::Object&& config)

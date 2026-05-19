@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2023-2024 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
+// Copyright (c) 2023-2026 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
 
 #ifndef JSON_HPP
 #define JSON_HPP
@@ -241,5 +241,23 @@ private:
         *stream << '"';
     }
 };
+
+inline std::ostream& operator<<(std::ostream& os, const Json::Object& obj)
+{
+    obj.dump(&os);
+    return os;
+}
+
+inline std::ostream& operator<<(std::ostream& os, const Json::Array& arr)
+{
+    arr.dump(&os);
+    return os;
+}
+
+inline std::ostream& operator<<(std::ostream& os, const Json& json)
+{
+    json.dump(&os);
+    return os;
+}
 
 #endif /* JSON_HPP */
