@@ -199,8 +199,7 @@ void Log::RxZeropad::serialize(std::ostream& console, std::ostream& logfile) con
 void Log::UhdLogInfo::serialize(std::ostream& console, std::ostream& logfile) const
 {
     if (info.verbosity >= uhd::log::info) {
-        console << time_short() << ' '
-                << std::right << std::setw(5) << level.to_string_color_fixed()
+        console << time_short() << ' ' << level.to_string_color_fixed()
                 << ": UHD/" << info.component << ": "
                 << info.message << std::endl;
     }
@@ -615,30 +614,27 @@ Logger::Logger(const std::filesystem::path& path_prefix, Json::Object&& config)
         throw syscall_error{"error opening log file: " + path.generic_string()};
 
     // log software origin and commit hash
-    Json::Object{{
+    log_file << Json::Object{{
         { "_level", Log::DEBUG.to_string() },
         { "_type", "software" },
         { "git_origin", std::string{git_origin} },
         { "git_hash", std::string{git_hash} }
-    }}.dump(&log_file);
-    log_file << '\n';
+    }} << '\n';
 
     // log hostname and uname
-    Json::Object{{
+    log_file << Json::Object{{
         { "_level", Log::DEBUG.to_string() },
         { "_type", "host" },
         { "hostname", std::string{hostname} },
         { "uname", unamebuf.str() }
-    }}.dump(&log_file);
-    log_file << '\n';
+    }} << '\n';
 
     // log contents of loaded configuration file
-    Json::Object{{
+    log_file << Json::Object{{
         { "_level", Log::DEBUG.to_string() },
         { "_type", "config" },
         { "config", config }
-    }}.dump(&log_file);
-    log_file << '\n';
+    }} << '\n';
 
     // spawn worker
     worker_handle = std::thread{&Logger::worker, this};

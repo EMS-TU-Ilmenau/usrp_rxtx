@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2024 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
+// Copyright (c) 2024-2026 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
 
 #ifndef MPSC_HPP
 #define MPSC_HPP
 
 #include <atomic>
-#include <cstdint>
 #include <optional>
 
 #ifdef TEST_MPSC

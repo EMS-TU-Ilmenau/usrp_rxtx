@@ -1,14 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2024 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
+// Copyright (c) 2024-2026 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
 
 #ifndef MQTT_HPP
 #define MQTT_HPP
 
-#include <cerrno>
-#include <cstring>
-
-#include <chrono>
-#include <exception>
 #include <iostream>
 #include <source_location>
 #include <span>
@@ -16,23 +11,26 @@
 #include <string>
 #include <thread>
 
+extern "C" {
+    #include <mosquitto.h>
+}
+
 #include "config.hpp"
 #include "error.hpp"
 #include "logging.hpp"
-#include "mosquitto.h"
 
 class mqtt_error : public error {
 public:
     mqtt_error(const std::string& message,
                const int mqtt_errno,
-               const std::source_location location =
-                 std::source_location::current())
+               const std::source_location location
+                   = std::source_location::current())
     {
         std::ostringstream buf;
         buf << location.file_name() << ':' << location.line()
             << ": mqtt_error: " << message << ": "
             << mosquitto_strerror(mqtt_errno) << " (" << mqtt_errno << ')';
-        what_str = std::move(buf.str());
+        what_str = buf.str();
     }
 };
 

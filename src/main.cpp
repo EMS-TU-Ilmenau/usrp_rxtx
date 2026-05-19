@@ -8,7 +8,9 @@
 #include <string>
 
 extern "C" {
+#if _POSIX_C_SOURCE >= 200112L
     #include <sched.h>
+#endif
 }
 
 #include <uhd/version.hpp>
@@ -78,6 +80,7 @@ try {
         if (cfg.mqtt.host != "0.0.0.0")
             mqtt = std::make_shared<MqttClient>(logger, cfg);
 
+#ifdef __linux__
         // register power management quality-of-service (PM QoS) request with
         // kernel. inhibits certain power mangement features that increase
         // latency above specified threshold (e.g., C-states).
@@ -90,7 +93,9 @@ try {
         if (!dev_latency)
             throw syscall_error{"error writing to /dev/cpu_dma_latency"};
         // keep file open until process terminates
+#endif
 
+#if _POSIX_C_SOURCE >= 200112L
         // store current scheduler settings before changing it below
         int oldsched = sched_getscheduler(0);
         if (oldsched == -1)
@@ -110,14 +115,17 @@ try {
         };
         if (sched_setscheduler(0, SCHED_FIFO, &param) == -1)
             throw syscall_error{"sched_setscheduler() failed"};
+#endif
 
         // connect to USRP
         uhd::usrp::multi_usrp::sptr usrp = uhd::usrp::multi_usrp::make(cfg.usrp.args);
 
+#if _POSIX_C_SOURCE >= 200112L
         // restore original scheduler settings. the remaining threads are under
         // our control and will set their own priority autonomously.
         if (sched_setscheduler(0, oldsched, &oldparam) == -1)
             throw syscall_error{"sched_setscheduler() failed"};
+#endif
 
         // select subdevice and sample rate first
         // NOTE: setting sample rate may change master clock rate (e.g., on B205)
@@ -326,26 +334,26 @@ try {
 
             Json::json_t rx_seconds =
                 rx ? Json::json_t{rx->get_rx_seconds()}
-                    : Json::Null{};
+                   : Json::Null{};
             Json::json_t tx_seconds =
                 tx ? !tx->is_muted() ? Json::json_t{tx->get_tx_seconds()}
-                                        : Json::json_t{"MUTE"}
-                    : Json::Null{};
+                                     : Json::json_t{"MUTE"}
+                   : Json::Null{};
             Json::json_t wr_seconds =
                 wr ? wr->is_running() ? Json::json_t{wr->get_wr_seconds()}
-                                        : Json::json_t{"FAILED"}
-                    : Json::Null{};
+                                      : Json::json_t{"FAILED"}
+                   : Json::Null{};
             Json::json_t wr_backlog =
                 wr ? Json::json_t{wr->get_backlog_bytes()}
-                    : Json::Null{};
+                   : Json::Null{};
             Json::json_t wr_free =
                 rx ? Json::json_t {std::filesystem::space(wr_dir).available}
-                    : Json::Null{};
+                   : Json::Null{};
 
             const auto now = usrp->get_time_now();
             Json::Object status {{
                 { "time_ns", (uint64_t) (now.get_full_secs() * 1e9) +
-                                (uint64_t) (now.get_frac_secs() * 1e9)},
+                             (uint64_t) (now.get_frac_secs() * 1e9)},
                 { "rx_seconds", rx_seconds },
                 { "tx_seconds", tx_seconds },
                 { "wr_seconds", wr_seconds },

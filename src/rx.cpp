@@ -5,7 +5,9 @@ extern "C" {
 #ifdef _GNU_SOURCE
     #include <pthread.h>
 #endif
+#if _POSIX_C_SOURCE >= 200112L
     #include <sched.h>
+#endif
 }
 
 #include "error.hpp"
@@ -58,12 +60,14 @@ try {
     pthread_setname_np(pthread_self(), "rx");
 #endif
 
-    // set realtime priorioty
+#if _POSIX_C_SOURCE >= 200112L
+    // set realtime priority
     const struct sched_param param = {
         .sched_priority = 99
     };
     if (sched_setscheduler(0, SCHED_FIFO, &param) == -1)
         throw syscall_error{"sched_setscheduler() failed"};
+#endif
 
     // setup rx streamer
     static_assert(std::is_same<sample_t, std::complex<int16_t>>::value);
@@ -134,7 +138,7 @@ try {
         } else {
             // recv() non-contiguous data into temporary buffer, as we need
             // the time_spec_t in rx_metadata_t to determine where to place
-            // the received samples in the Rinfbufs
+            // the received samples in the Ringbufs
             for (size_t n = 0; n < num_channels; n++) {
                 buf_ptrs[n] = (void *) tmp_bufs[n].data();
             }
@@ -143,6 +147,7 @@ try {
         // receive packet for each channel from USRP
         uhd::rx_metadata_t md;
         const size_t rcvd_samples = rx->recv(buf_ptrs, recv_max_samples, md, recv_timeout, true);
+        assert(md.has_time_spec);
 
         // error handling
         if (rcvd_samples == 0) [[unlikely]] {
@@ -196,26 +201,11 @@ try {
         /// time spec of this recv() in samples
         const uint64_t ts_samples_packet = md.time_spec.to_ticks(sample_rate_hz);
 
-        // verify time specs
-        // TODO: improve this; maybe log and terminate instead of assertion
-        assert(md.has_time_spec);
-        // FIXME: breaks reception if device starts burst prematurely
-        assert(ts_samples_packet >= ts_samples_next_recv);
-
         if (contiguous) [[likely]] {
-            // verify time specs of contiguous sample packets
-            // FIXME: results in one log entry per packet if time specs do mismatch
-            /*
-            if (ts_samples_packet != ts_samples_next_recv) [[unlikely]] {
-                // TODO: implement as Log::RxTimespecMismatch
-                logger->log("Timestamp mismatch: "
-                            + std::to_string(ts_samples_packet) + " != "
-                            + std::to_string(ts_samples_next_recv),
-                            Log::WARN);
-            }
-            */
-
             // regular receive: samples are already correctly placed in Ringbufs
+            // NOTE: opting to trust UHD that packets are contiguous and not
+            //       to check that packet timestamps behave as expected, i.e.,
+            //       ts_samples_packet == ts_samples_next_recv
             for (size_t n = 0; n < num_channels; n++) {
                 ringbufs[n]->produce(rcvd_samples);
             }
