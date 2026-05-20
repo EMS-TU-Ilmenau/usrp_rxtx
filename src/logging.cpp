@@ -361,7 +361,7 @@ void Log::UhdStreamCmd::serialize(std::ostream& console, std::ostream& logfile) 
         console << ": Rx stream " << stream_cmd.num_samps << " samples and more ";
         break;
     default:
-        throw not_implemented_error{"unknown uhd::stream_cmd_t value: "
+        throw generic_error{"unknown uhd::stream_cmd_t value: "
             + std::to_string(stream_cmd.stream_mode)};
     }
 

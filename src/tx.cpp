@@ -37,10 +37,10 @@ Tx::Tx(uhd::usrp::multi_usrp::sptr usrp, Logger::sptr logger, const Config& cfg)
     std::vector<sample_t> tx_signal(tx_samples);
     std::ifstream file {cfg.tx.file, std::ios_base::in | std::ios_base::binary};
     if (!file)
-        throw std::runtime_error{"failed to open Tx file: " + cfg.tx.file};
+        throw generic_error{"failed to open Tx file: " + cfg.tx.file};
     file.read((char *) tx_signal.data(), tx_signal.size() * sizeof(sample_t));
     if (!file)
-        throw std::runtime_error{"failed to read Tx file: " + cfg.tx.file};
+        throw generic_error{"failed to read Tx file: " + cfg.tx.file};
     file.close();
 
     // log number of samples read from file
@@ -240,6 +240,6 @@ align_time(const uhd::time_spec_t& ts, double delay_sec,
                                 (samples % sample_rate_hz_int) / sample_rate_hz);
     } else {
         // TODO: implement non-integer sample rates
-        throw std::invalid_argument{"Non-integer sample rates are not implemented"};
+        throw generic_error{"Non-integer sample rates are not implemented"};
     }
 }
