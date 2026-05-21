@@ -11,7 +11,6 @@ extern "C" {
     #include <sys/types.h>
 }
 
-#include "config.hpp"
 #include "error.hpp"
 #include "wr.hpp"
 
@@ -111,16 +110,18 @@ try {
                 throw generic_error{"write() returned 0"};
 
             // check if span was clobbered during write()
-            // TODO: ftruncate() the potentially clobbered bytes away
-            if (ringbufs[ch]->get_clobber_distance(tails[ch]) < 0)
-                throw generic_error{"write() too slow: end of file was clobbered"};
+            if (ringbufs[ch]->get_clobber_distance(tails[ch]) < 0) {
+                if (ftruncate(fds[ch], sizeof(Wr::sample_t) * _samples_written) != 0)
+                    throw syscall_error{"Filesystem writing too slow and last block of file clobbered; ftruncate() failed"};
+                throw generic_error{"Filesystem writing too slow"};
+            }
 
             // update tail pointer and sleep duration
-            tails[ch] += ret / sizeof(sample_t);
+            tails[ch] += ret / sizeof(Wr::sample_t);
 
             // increment number of written samples
-            if (ch == 0)
-                _samples_written += ret / sizeof(sample_t);
+            if (ch == ringbufs.size() - 1)
+                _samples_written += ret / sizeof(Wr::sample_t);
         }
 
         for (size_t ch = 0; ch < ringbufs.size(); ch++)
