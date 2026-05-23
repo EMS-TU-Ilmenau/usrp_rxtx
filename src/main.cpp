@@ -211,7 +211,8 @@ try {
             for (size_t ch = 0; ch < usrp->get_rx_num_channels(); ch++) {
                 if (!cfg.rx.antenna.empty())
                     usrp->set_rx_antenna(cfg.rx.antenna, ch);
-                usrp->set_rx_bandwidth(cfg.rx.bandwidth, ch);
+                if (cfg.rx.bandwidth > 0.)
+                    usrp->set_rx_bandwidth(cfg.rx.bandwidth, ch);
                 usrp->set_rx_gain(cfg.rx.gain, ch);
                 if (!cfg.rx.lo_source.empty() && !cfg.rx.lo_source.starts_with("twinrx_"))
                     usrp->set_rx_lo_source(cfg.rx.lo_source, uhd::usrp::multi_usrp::ALL_LOS, ch);
@@ -233,7 +234,8 @@ try {
             for (size_t ch = 0; ch < usrp->get_tx_num_channels(); ch++) {
                 if (!cfg.tx.antenna.empty())
                     usrp->set_tx_antenna(cfg.tx.antenna, ch);
-                usrp->set_tx_bandwidth(cfg.tx.bandwidth, ch);
+                if (cfg.tx.bandwidth > 0.)
+                    usrp->set_tx_bandwidth(cfg.tx.bandwidth, ch);
                 usrp->set_tx_gain(cfg.tx.gain, ch);
                 if (!cfg.tx.lo_source.empty())
                     usrp->set_tx_lo_source(cfg.tx.lo_source, uhd::usrp::multi_usrp::ALL_LOS, ch);
