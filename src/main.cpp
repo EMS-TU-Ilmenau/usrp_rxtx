@@ -5,6 +5,7 @@
 #include <csignal>
 #include <fstream>
 #include <iostream>
+#include <ostream>
 #include <string>
 
 extern "C" {
@@ -273,13 +274,14 @@ try {
             if (ret == -1 && errno != EAGAIN && errno != EINTR) {
                 throw syscall_error{"sigtimedwait() failed"};
             } else if (ret == SIGINT || ret == SIGTERM) {
-                logger->log("Received SIGINT or SIGTERM. Exiting gracefully.");
+                logger->log("Signal SIGINT or SIGTERM received. Exiting gracefully.");
                 break;
             } else if (ret == SIGUSR1 && rx) {
-                logger->log("Received SIGUSR1. Toggling file writing.");
                 if (wr) {
+                    logger->log("Signal SIGUSR1 received. File writer stopped.");
                     wr.reset();
                 } else {
+                    logger->log("Signal SIGUSR1 received. File writer started.");
                     wr = std::make_shared<Wr>(
                         rx->get_ringbufs(), logger,
                         wr_dir / ("rx_" + hostname + "_" + cfg.usrp.args),
@@ -287,7 +289,7 @@ try {
                     );
                 }
             } else if (ret == SIGUSR2 && tx) {
-                logger->log("Received SIGUSR2. Toggling Tx muting.");
+                logger->log("Signal SIGUSR2 received. Tx muting toggled.");
                 tx->toggle_mute();
             }
 

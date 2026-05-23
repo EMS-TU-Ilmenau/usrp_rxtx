@@ -217,7 +217,7 @@ try {
 
             // abort if more than a second worth of samples need zero-padding
             if (lost_samples > (uint64_t) sample_rate_hz) {
-                logger->log("Lost too many samples for zero-padding: "
+                logger->log("Rx lost too many samples for zero-padding: "
                             + std::to_string(lost_samples)
                             + ". Terminating.", Log::FATAL);
                 run.store(false, std::memory_order_relaxed);

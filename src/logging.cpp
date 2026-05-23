@@ -21,12 +21,11 @@ extern "C" {
 static inline auto timespec_to_str(const uhd::time_spec_t& time) -> const std::string
 {
     using namespace std::chrono;
-    using ns_clock = std::chrono::time_point<system_clock, nanoseconds>;
+    using unix_ns = std::chrono::time_point<system_clock, nanoseconds>;
 
     uint64_t nsec = (uint64_t) (time.get_full_secs() * 1e9) +
                     (uint64_t) (time.get_frac_secs() * 1e9);
-    //return std::format("{:%Y-%m-%dT%H:%M:%S}Z", ns_clock{nanoseconds{nsec}});
-    return std::format("{:%H:%M:%S}Z", ns_clock{nanoseconds{nsec}});
+    return std::format("{:%H:%M:%S}Z", unix_ns{nanoseconds{nsec}});
 }
 
 /// return error level formatted as std::string
@@ -220,42 +219,43 @@ void Log::UhdAsyncMetadata::serialize(std::ostream& console, std::ostream& logfi
     Json::json_t event_code;
     switch (async_meta.event_code) {
     case uhd::async_metadata_t::EVENT_CODE_BURST_ACK:
-        event = "BURST_ACK";
+        event = "uhd::async_metadata_t::EVENT_CODE_BURST_ACK";
         event_code = "EVENT_CODE_BURST_ACK";
         break;
     case uhd::async_metadata_t::EVENT_CODE_USER_PAYLOAD:
-        event = "USER_PAYLOAD";
+        event = "uhd::async_metadata_t::EVENT_CODE_USER_PAYLOAD";
         event_code = "EVENT_CODE_USER_PAYLOAD";
         break;
     case uhd::async_metadata_t::EVENT_CODE_SEQ_ERROR:
-        event = "SEQ_ERROR";
+        event = "uhd::async_metadata_t::EVENT_CODE_SEQ_ERROR";
         event_code = "EVENT_CODE_SEQ_ERROR";
         break;
     case uhd::async_metadata_t::EVENT_CODE_SEQ_ERROR_IN_BURST:
-        event = "SEQ_ERROR_IN_BURST";
+        event = "uhd::async_metadata_t::EVENT_CODE_SEQ_ERROR_IN_BURST";
         event_code = "EVENT_CODE_SEQ_ERROR_IN_BURST";
         break;
     case uhd::async_metadata_t::EVENT_CODE_TIME_ERROR:
-        event = "TIME_ERROR";
+        event = "uhd::async_metadata_t::EVENT_CODE_TIME_ERROR";
         event_code = "EVENT_CODE_TIME_ERROR";
         break;
     case uhd::async_metadata_t::EVENT_CODE_UNDERFLOW:
-        event = "UNDERFLOW";
+        event = "uhd::async_metadata_t::EVENT_CODE_UNDERFLOW";
         event_code = "EVENT_CODE_UNDERFLOW";
         break;
     case uhd::async_metadata_t::EVENT_CODE_UNDERFLOW_IN_PACKET:
-        event = "UNDERFLOW_IN_PACKET";
+        event = "uhd::async_metadata_t::EVENT_CODE_UNDERFLOW_IN_PACKET";
         event_code = "EVENT_CODE_UNDERFLOW_IN_PACKET";
         break;
     default:
-        event = std::to_string(async_meta.event_code);
+        event = std::format("uhd::async_metadata_t::EVENT_CODE_{:d}",
+            (int) async_meta.event_code);
         event_code = (uint64_t) async_meta.event_code;
     }
 
     console << time_short() << ' ' << level.to_string_color_fixed()
-            << ": Tx async event " << event << " occurred "
-            << "on channel " << async_meta.channel
-            << (async_meta.has_time_spec ? " at " : "")
+            << ": Tx received " << event
+            << " on channel " << async_meta.channel
+            << (async_meta.has_time_spec ? " with time_spec " : "")
             << (async_meta.has_time_spec ? timespec_to_str(async_meta.time_spec) : "")
             << '.' << std::endl;
 
@@ -263,16 +263,20 @@ void Log::UhdAsyncMetadata::serialize(std::ostream& console, std::ostream& logfi
         { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
-        { "_type", "async_metadata" },
+        { "_type", "uhd::async_metadata_t" },
         { "event_code", event_code },
         { "channel", async_meta.channel },
         { "has_time_spec", async_meta.has_time_spec },
         { "time_spec", (uint64_t) (async_meta.time_spec.get_full_secs() * 1e9) +
                        (uint64_t) (async_meta.time_spec.get_frac_secs() * 1e9) },
-        { "user_payload", Json::Array{{
-            (uint64_t) async_meta.user_payload[0], (uint64_t) async_meta.user_payload[1],
-            (uint64_t) async_meta.user_payload[2], (uint64_t) async_meta.user_payload[3]
-        }}}
+        { "user_payload",
+            async_meta.event_code == uhd::async_metadata_t::EVENT_CODE_USER_PAYLOAD
+                ? Json::Array{{
+                    (uint64_t) async_meta.user_payload[0], (uint64_t) async_meta.user_payload[1],
+                    (uint64_t) async_meta.user_payload[2], (uint64_t) async_meta.user_payload[3]
+                }}
+                : Json::Array{}
+        }
     }} << '\n';
 }
 
@@ -282,49 +286,50 @@ void Log::UhdRxMetadata::serialize(std::ostream& console, std::ostream& logfile)
     Json::json_t error_code;
     switch (rx_meta.error_code) {
     case uhd::rx_metadata_t::ERROR_CODE_NONE:
-        error = "NONE";
+        error = "uhd::rx_metadata_t::ERROR_CODE_NONE";
         error_code = "ERROR_CODE_NONE";
         break;
     case uhd::rx_metadata_t::ERROR_CODE_LATE_COMMAND:
-        error = "LATE_COMMAND";
+        error = "uhd::rx_metadata_t::ERROR_CODE_LATE_COMMAND";
         error_code = "ERROR_CODE_LATE_COMMAND";
         break;
     case uhd::rx_metadata_t::ERROR_CODE_ALIGNMENT:
-        error = "ALIGNMENT";
+        error = "uhd::rx_metadata_t::ERROR_CODE_ALIGNMENT";
         error_code = "ERROR_CODE_ALIGNMENT";
         break;
     case uhd::rx_metadata_t::ERROR_CODE_BAD_PACKET:
-        error = "BAD_PACKET";
+        error = "uhd::rx_metadata_t::ERROR_CODE_BAD_PACKET";
         error_code = "ERROR_CODE_BAD_PACKET";
         break;
     case uhd::rx_metadata_t::ERROR_CODE_BROKEN_CHAIN:
-        error = "BROKEN_CHAIN";
+        error = "uhd::rx_metadata_t::ERROR_CODE_BROKEN_CHAIN";
         error_code = "ERROR_CODE_BROKEN_CHAIN";
         break;
     case uhd::rx_metadata_t::ERROR_CODE_OVERFLOW:
-        error = "OVERFLOW";
+        error = "uhd::rx_metadata_t::ERROR_CODE_OVERFLOW";
         error_code = "ERROR_CODE_OVERFLOW";
         break;
     case uhd::rx_metadata_t::ERROR_CODE_TIMEOUT:
-        error = "TIMEOUT";
+        error = "uhd::rx_metadata_t::ERROR_CODE_TIMEOUT";
         error_code = "ERROR_CODE_TIMEOUT";
         break;
     default:
-        error = std::to_string(rx_meta.error_code);
+        error = std::format("uhd::rx_metadata_t::ERROR_CODE_{:d}",
+            (int) rx_meta.error_code);
         error_code = (uint64_t) rx_meta.error_code;
     }
 
     if (rx_meta.error_code == uhd::rx_metadata_t::ERROR_CODE_NONE) {
         console << time_short() << ' ' << level.to_string_color_fixed()
-                << ": Rx stream "
-                << (rx_meta.end_of_burst ? "ended" : "started")
-                << (rx_meta.has_time_spec ? " at " : "")
+                << ": Rx received"
+                << (rx_meta.end_of_burst ? " end_of_burst" : " start_of_burst")
+                << (rx_meta.has_time_spec ? " with time_spec " : "")
                 << (rx_meta.has_time_spec ? timespec_to_str(rx_meta.time_spec) : "")
                 << '.' << std::endl;
     } else {
         console << time_short() << ' ' << level.to_string_color_fixed()
-                << "Rx stream error " << error << " occurred"
-                << (rx_meta.has_time_spec ? " at " : "")
+                << ": Rx received " << error
+                << (rx_meta.has_time_spec ? " with time_spec " : "")
                 << (rx_meta.has_time_spec ? timespec_to_str(rx_meta.time_spec) : "")
                 << '.' << std::endl;
     }
@@ -333,7 +338,7 @@ void Log::UhdRxMetadata::serialize(std::ostream& console, std::ostream& logfile)
         { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
-        { "_type", "rx_metadata" },
+        { "_type", "uhd::rx_metadata_t" },
         { "error_code", error_code },
         { "out_of_sequence", rx_meta.out_of_sequence },
         { "start_of_burst", rx_meta.start_of_burst },
@@ -346,56 +351,44 @@ void Log::UhdRxMetadata::serialize(std::ostream& console, std::ostream& logfile)
 
 void Log::UhdStreamCmd::serialize(std::ostream& console, std::ostream& logfile) const
 {
-    console << time_short() << ' ' << level.to_string_color_fixed();
-    switch (stream_cmd.stream_mode) {
-    case uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS:
-        console << ": Rx stream start ";
-        break;
-    case uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS:
-        console << ": Rx stream stop ";
-        break;
-    case uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_DONE:
-        console << ": Rx stream " << stream_cmd.num_samps << " samples ";
-        break;
-    case uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_MORE:
-        console << ": Rx stream " << stream_cmd.num_samps << " samples and more ";
-        break;
-    default:
-        throw generic_error{"unknown uhd::stream_cmd_t value: "
-            + std::to_string(stream_cmd.stream_mode)};
-    }
-
-    if (stream_cmd.stream_now) {
-        console << "now." << std::endl;
-    } else {
-        console << "scheduled at " << timespec_to_str(stream_cmd.time_spec) << '.'
-                << std::endl;
-    }
-
+    std::string name;
     Json::json_t stream_mode;
     switch (stream_cmd.stream_mode) {
     case uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS:
+        name = "uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS";
         stream_mode = "STREAM_MODE_START_CONTINUOUS";
         break;
     case uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS:
+        name = "uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS";
         stream_mode = "STREAM_MODE_STOP_CONTINUOUS";
         break;
     case uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_DONE:
+        name = std::format("uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_DONE ({:d} samples)",
+            stream_cmd.num_samps);
         stream_mode = "STREAM_MODE_NUM_SAMPS_AND_DONE";
         break;
     case uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_MORE:
+        name = std::format("uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_MORE ({:d} samples)",
+            stream_cmd.num_samps);
         stream_mode = "STREAM_MODE_NUM_SAMPS_AND_MORE";
         break;
     default:
+        name = std::format("uhd::stream_cmd_t::STREAM_MODE_{:d}",
+            (int) stream_cmd.stream_mode);
         stream_mode = (uint64_t) stream_cmd.stream_mode;
-        break;
     }
+
+    console << time_short() << ' ' << level.to_string_color_fixed()
+            << ": Rx sent " << name
+            << (stream_cmd.stream_now ? "" : " with time_spec ")
+            << (stream_cmd.stream_now ? "" : timespec_to_str(stream_cmd.time_spec))
+            << '.' << std::endl;
 
     logfile << Json::Object{{
         { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
-        { "_type", "rx_stream_cmd" },
+        { "_type", "uhd::rx_stream_cmd_t" },
         { "stream_mode", stream_mode },
         { "num_samps", stream_cmd.num_samps },
         { "stream_now", stream_cmd.stream_now },
@@ -422,7 +415,7 @@ void Log::UhdTuneResult::serialize(std::ostream& console, std::ostream& logfile)
         { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
-        { "_type", "tune_result" },
+        { "_type", "uhd::tune_result_t" },
         { "path", path == Path::RX ? "rx" : "tx" },
         { "channel", chan },
         { "clipped_rf_freq", tune_res.clipped_rf_freq },
@@ -438,8 +431,8 @@ void Log::UhdTxMetadata::serialize(std::ostream& console, std::ostream& logfile)
     // only log start and end of burst to console
     if (tx_meta.start_of_burst || tx_meta.end_of_burst) {
         console << time_short() << ' ' << level.to_string_color_fixed()
-                << (tx_meta.start_of_burst ? ": Tx burst start " : ": Tx burst end ")
-                << (tx_meta.has_time_spec ? "at " : "now")
+                << (tx_meta.start_of_burst ? ": Tx sent start_of_burst" : ": Tx sent end_of_burst")
+                << (tx_meta.has_time_spec ? " with time_spec " : "")
                 << (tx_meta.has_time_spec ? timespec_to_str(tx_meta.time_spec) : "")
                 << '.' << std::endl;
     }
@@ -448,7 +441,7 @@ void Log::UhdTxMetadata::serialize(std::ostream& console, std::ostream& logfile)
         { "_time", time_rfc3339() },
         { "_time_ns", time_epoch_ns() },
         { "_level", level.to_string() },
-        { "_type", "tx_metadata" },
+        { "_type", "uhd::tx_metadata_t" },
         { "start_of_burst", tx_meta.start_of_burst },
         { "end_of_burst", tx_meta.end_of_burst },
         { "has_time_spec", tx_meta.has_time_spec },
@@ -554,11 +547,13 @@ void Log::UsrpHardware::serialize(std::ostream& console, std::ostream& logfile) 
 void Log::WrOpen::serialize(std::ostream& console, std::ostream& logfile) const
 {
     using namespace std::chrono;
-    using ns_clock = std::chrono::time_point<system_clock, nanoseconds>;
+    using unix_ns = std::chrono::time_point<system_clock, nanoseconds>;
 
     console << time_short() << ' ' << level.to_string_color_fixed()
             << ": Writing file " << std::quoted(path.generic_string())
-            << " from ring buffer offset " << offset << " samples."
+            << " starting from "
+            << std::format("{:%H:%M:%S}Z", unix_ns{nanoseconds{start_ns}})
+            << " (ring buffer offset " << offset << " samples)."
             << std::endl;
 
     logfile << Json::Object{{
@@ -567,8 +562,8 @@ void Log::WrOpen::serialize(std::ostream& console, std::ostream& logfile) const
         { "_level", level.to_string() },
         { "_type", "wr_open" },
         { "file", path.generic_string() },
-        { "time_start", std::format("{:%Y-%m-%dT%H:%M:%S}Z",
-            ns_clock{nanoseconds{start_ns}})
+        { "time_start",
+            std::format("{:%Y-%m-%dT%H:%M:%S}Z", unix_ns{nanoseconds{start_ns}})
         },
         { "time_start_ns", start_ns },
         { "offset_samples", offset }

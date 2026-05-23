@@ -3,6 +3,7 @@
 
 #include <cstring>
 #include <type_traits>
+#include <uhd/types/metadata.hpp>
 
 extern "C" {
 #ifdef _GNU_SOURCE
@@ -126,6 +127,9 @@ try {
         // stream buffer to USRP
         size_t num_tx_samps = tx->send(buf_ptrs, FRAMES_PER_SEND * samps_per_frame, tx_md, 1.);
         samples_burst += num_tx_samps;
+        if (num_tx_samps == 0) [[unlikely]] {
+            logger->log("Tx uhd::tx_streamer::send() timed out.", Log::ERROR);
+        }
 
         // reset metadata for subsequent iterations (may be changed by error
         // handling below)
@@ -176,10 +180,24 @@ try {
             tx_md.has_time_spec  = false;
             tx_md.start_of_burst = false;
             tx_md.end_of_burst   = true;
-            tx->send("", 0, tx_md);
+            tx->send(buf_ptrs, 0, tx_md);
 
             // log EOB
             logger->log_uhd_tx_metadata(tx_md);
+
+            // receive async BURST_ACKs for all channels
+            // FIXME: delays start of next of burst after underflow
+            size_t num_acks = 0;
+            while (num_acks < num_channels) {
+                // FIXME: hard-coded timeout
+                if (tx->recv_async_msg(async_md, 0.1)) {
+                    logger->log_uhd_async_metadata(async_md);
+                    if (async_md.event_code == uhd::async_metadata_t::EVENT_CODE_BURST_ACK)
+                        num_acks++;
+                } else {
+                    break;
+                }
+            }
 
             // reset samples_burst so next main loop iteration starts with a
             // new burst
@@ -194,7 +212,6 @@ try {
 
                 // poll for mute to be lifted while also processing async_metadata_t
                 while (run.load(std::memory_order_relaxed) && mute.load(std::memory_order_relaxed)) {
-                    // yields the EVENT_CODE_BURST_ACK for above EOB (one per channel)
                     while (tx->recv_async_msg(async_md, 0.001))
                         logger->log_uhd_async_metadata(async_md);
                 }
