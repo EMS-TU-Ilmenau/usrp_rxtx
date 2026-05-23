@@ -289,7 +289,7 @@ try {
                     );
                 }
             } else if (ret == SIGUSR2 && tx) {
-                logger->log("Signal SIGUSR2 received. Tx muting toggled.");
+                logger->log("Signal SIGUSR2 received. Tx mute toggled.");
                 tx->toggle_mute();
             }
 
@@ -322,6 +322,24 @@ try {
                 break;
             }
 
+            // print current subsystem metrics as single console status line
+            const auto now = usrp->get_time_now();
+            logger->set_status(
+                now,
+                rx ? rx->get_rx_seconds()
+                   : -1.,
+                tx ? !tx->is_muted() ? tx->get_tx_seconds()
+                                     : 0.
+                   : -1.,
+                wr ? wr->is_running() ? wr->get_wr_seconds()
+                                      : -2.
+                   : -1,
+                wr ? wr->get_backlog_bytes()
+                   : 0,
+                rx ? std::filesystem::space(wr_dir).available
+                   : 0
+            );
+
             // get current POSIX time in seconds
             const uint64_t time_sec = std::chrono::duration_cast<std::chrono::seconds>(
                 std::chrono::system_clock::now().time_since_epoch()
@@ -352,7 +370,6 @@ try {
                 rx ? Json::json_t {std::filesystem::space(wr_dir).available}
                    : Json::Null{};
 
-            const auto now = usrp->get_time_now();
             Json::Object status {{
                 { "time_ns", (uint64_t) (now.get_full_secs() * 1e9) +
                              (uint64_t) (now.get_frac_secs() * 1e9)},

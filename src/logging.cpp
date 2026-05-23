@@ -17,8 +17,11 @@ extern "C" {
 #include "logging.hpp"
 #include "version.hpp"
 
+/// formatted console status line
+static std::string console_status;
+
 /// convert uhd::time_spec_t to HH:MM:SS timestamp
-static inline auto timespec_to_str(const uhd::time_spec_t& time) -> const std::string
+static inline auto timespec_to_hms_ns(const uhd::time_spec_t& time) -> const std::string
 {
     using namespace std::chrono;
     using unix_ns = std::chrono::time_point<system_clock, nanoseconds>;
@@ -26,6 +29,19 @@ static inline auto timespec_to_str(const uhd::time_spec_t& time) -> const std::s
     uint64_t nsec = (uint64_t) (time.get_full_secs() * 1e9) +
                     (uint64_t) (time.get_frac_secs() * 1e9);
     return std::format("{:%H:%M:%S}Z", unix_ns{nanoseconds{nsec}});
+}
+
+/// convert uhd::time_spec_t to HH:MM:SS timestamp
+static inline auto timespec_to_hms_ms(const uhd::time_spec_t& time) -> const std::string
+{
+    using namespace std::chrono;
+    using unix_ns = std::chrono::time_point<system_clock, nanoseconds>;
+
+    uint64_t nsec = (uint64_t) (time.get_full_secs() * 1e9) +
+                    (uint64_t) (time.get_frac_secs() * 1e9);
+    auto truncated = std::chrono::floor<std::chrono::milliseconds>(
+        unix_ns{nanoseconds{nsec}});
+    return std::format("{:%H:%M:%S}Z", truncated);
 }
 
 /// return error level formatted as std::string
@@ -123,10 +139,69 @@ void Log::Null::serialize(std::ostream& console, std::ostream& logfile) const
     (void) logfile;
 }
 
+void Log::Status::serialize(std::ostream& console, std::ostream& logfile) const
+{
+    (void) console;
+    (void) logfile;
+
+    std::stringstream buf;
+    buf << timespec_to_hms_ms(time);
+
+    if (rx == -1.) {
+        buf << " rx=\x1b[90mDISABLED\x1b[0m";
+    } else {
+        buf << std::format(" rx={:05.01f}", rx);
+    }
+
+    if (tx == -1.) {
+        buf << " tx=\x1b[90mDISABLED\x1b[0m";
+    } else if (tx == 0.) {
+        buf << " tx=\x1b[93mMUTED\x1b[0m";
+    } else {
+        buf << std::format(" tx={:05.01f}", tx);
+    }
+
+    if (rx == -1.) {
+        buf << " wr=\x1b[90mDISABLED\x1b[0m";
+    } else if (wr == -1.) {
+        buf << " wr=\x1b[93mSTANDBY\x1b[0m";
+    } else if (wr == -2.) {
+        buf << " wr=\x1b[91mFAILED\x1b[0m";
+    } else {
+        buf << std::format(" wr={:05.01f}", wr);
+    }
+
+    // only format wr_queue and wr_free if rx is configured
+    if (rx < 0.) {
+        console_status = buf.str();
+        return;
+    }
+
+    uint64_t wr_queue_mib = wr_queue >> 20;
+    if (wr_queue_mib < 64) {
+        buf << std::format(" wr_queue={:03}M", wr_queue_mib);
+    } else if (wr_queue_mib < 256) {
+        buf << std::format(" wr_queue=\x1b[93m{:03}M\x1b[0m", wr_queue_mib);
+    } else {
+        buf << std::format(" wr_queue=\x1b[91m{:03}M\x1b[0m", wr_queue_mib);
+    }
+
+    uint64_t wr_free_gib = wr_free >> 30;
+    if (wr_free_gib > 256) {
+        buf << std::format(" wr_free={:03}G", wr_free_gib);
+    } else if (wr_free_gib > 64) {
+        buf << std::format(" wr_free=\x1b[93m{:03}G\x1b[0m", wr_free_gib);
+    } else {
+        buf << std::format(" wr_free=\x1b[91m{:03}G\x1b[0m", wr_free_gib);
+    }
+
+    console_status = buf.str();
+}
+
 void Log::Misc::serialize(std::ostream& console, std::ostream& logfile) const
 {
     console << time_short() << ' ' << level.to_string_color_fixed() << ": "
-            << msg << std::endl;
+            << msg << '\n';
 
     logfile << Json::Object{{
         { "_time", time_rfc3339() },
@@ -150,7 +225,7 @@ void Log::Exception::serialize(std::ostream& console, std::ostream& logfile) con
     }
 
     console << time_short() << ' ' << level.to_string_color_fixed()
-            << ": Exception: " << what << std::endl;
+            << ": Exception: " << what << '\n';
 
     logfile << Json::Object{{
         { "_time", time_rfc3339() },
@@ -167,7 +242,7 @@ void Log::Exit::serialize(std::ostream& console, std::ostream& logfile) const
             << (exit_code == 0
                     ? ": Exiting successfully with exit code "
                     : ": Exiting abnormally with exit code ")
-            << exit_code << '.' << std::endl;
+            << exit_code << '.' << '\n';
 
     logfile << Json::Object{{
         { "_time", time_rfc3339() },
@@ -183,7 +258,7 @@ void Log::RxZeropad::serialize(std::ostream& console, std::ostream& logfile) con
     console << time_short() << ' ' << level.to_string_color_fixed()
             << ": Zero padding " << samples
             << " samples at ring buffer offset " << offset << " samples."
-            << std::endl;
+            << '\n';
 
     logfile << Json::Object{{
         { "_time", time_rfc3339() },
@@ -200,7 +275,7 @@ void Log::UhdLogInfo::serialize(std::ostream& console, std::ostream& logfile) co
     if (info.verbosity >= uhd::log::info) {
         console << time_short() << ' ' << level.to_string_color_fixed()
                 << ": UHD/" << info.component << ": "
-                << info.message << std::endl;
+                << info.message << '\n';
     }
 
     logfile << Json::Object{{
@@ -256,8 +331,8 @@ void Log::UhdAsyncMetadata::serialize(std::ostream& console, std::ostream& logfi
             << ": Tx received " << event
             << " on channel " << async_meta.channel
             << (async_meta.has_time_spec ? " with time_spec " : "")
-            << (async_meta.has_time_spec ? timespec_to_str(async_meta.time_spec) : "")
-            << '.' << std::endl;
+            << (async_meta.has_time_spec ? timespec_to_hms_ns(async_meta.time_spec) : "")
+            << '.' << '\n';
 
     logfile << Json::Object{{
         { "_time", time_rfc3339() },
@@ -324,14 +399,14 @@ void Log::UhdRxMetadata::serialize(std::ostream& console, std::ostream& logfile)
                 << ": Rx received"
                 << (rx_meta.end_of_burst ? " end_of_burst" : " start_of_burst")
                 << (rx_meta.has_time_spec ? " with time_spec " : "")
-                << (rx_meta.has_time_spec ? timespec_to_str(rx_meta.time_spec) : "")
-                << '.' << std::endl;
+                << (rx_meta.has_time_spec ? timespec_to_hms_ns(rx_meta.time_spec) : "")
+                << '.' << '\n';
     } else {
         console << time_short() << ' ' << level.to_string_color_fixed()
                 << ": Rx received " << error
                 << (rx_meta.has_time_spec ? " with time_spec " : "")
-                << (rx_meta.has_time_spec ? timespec_to_str(rx_meta.time_spec) : "")
-                << '.' << std::endl;
+                << (rx_meta.has_time_spec ? timespec_to_hms_ns(rx_meta.time_spec) : "")
+                << '.' << '\n';
     }
 
     logfile << Json::Object{{
@@ -381,8 +456,8 @@ void Log::UhdStreamCmd::serialize(std::ostream& console, std::ostream& logfile) 
     console << time_short() << ' ' << level.to_string_color_fixed()
             << ": Rx sent " << name
             << (stream_cmd.stream_now ? "" : " with time_spec ")
-            << (stream_cmd.stream_now ? "" : timespec_to_str(stream_cmd.time_spec))
-            << '.' << std::endl;
+            << (stream_cmd.stream_now ? "" : timespec_to_hms_ns(stream_cmd.time_spec))
+            << '.' << '\n';
 
     logfile << Json::Object{{
         { "_time", time_rfc3339() },
@@ -409,7 +484,7 @@ void Log::UhdTuneResult::serialize(std::ostream& console, std::ostream& logfile)
 
     console << time_short() << ' ' << level.to_string_color_fixed()
             << (path == Path::RX ? ": Tuned Rx channel " : ": Tuned Tx channel ") << chan
-            << ": " << obj << std::endl;
+            << ": " << obj << '\n';
 
     logfile << Json::Object{{
         { "_time", time_rfc3339() },
@@ -433,8 +508,8 @@ void Log::UhdTxMetadata::serialize(std::ostream& console, std::ostream& logfile)
         console << time_short() << ' ' << level.to_string_color_fixed()
                 << (tx_meta.start_of_burst ? ": Tx sent start_of_burst" : ": Tx sent end_of_burst")
                 << (tx_meta.has_time_spec ? " with time_spec " : "")
-                << (tx_meta.has_time_spec ? timespec_to_str(tx_meta.time_spec) : "")
-                << '.' << std::endl;
+                << (tx_meta.has_time_spec ? timespec_to_hms_ns(tx_meta.time_spec) : "")
+                << '.' << '\n';
     }
 
     logfile << Json::Object{{
@@ -554,7 +629,7 @@ void Log::WrOpen::serialize(std::ostream& console, std::ostream& logfile) const
             << " starting from "
             << std::format("{:%H:%M:%S}Z", unix_ns{nanoseconds{start_ns}})
             << " (ring buffer offset " << offset << " samples)."
-            << std::endl;
+            << '\n';
 
     logfile << Json::Object{{
         { "_time", time_rfc3339() },
@@ -689,19 +764,21 @@ try {
 /// serialize all currently queued log messages
 void Logger::serialize_messages()
 {
-    for (auto opt = queue.pop(); opt.has_value(); opt = queue.pop()) {
+    auto opt = queue.pop();
+    if (!opt.has_value())
+        return;
+
+    for (; opt.has_value(); opt = queue.pop()) {
         // defer formatting to individual variant's .serialize() function
-        std::ostringstream buf;
-        std::visit([&buf, this](auto& arg){
+        std::visit([this](auto& arg){
             // FIXME: Log::*::serialize() prints ANSI escape codes to
             //        colorize log levels without verifying that console
             //        has color support
             // TODO: check environment variable TERM ends with "color"
-            return arg.serialize(buf, log_file);
+            return arg.serialize(std::cout, log_file);
         }, opt.value());
-
-        // TODO: coalesce terminal output of multiple consecutive messages
-        //       without accumulating too many messages in case of bursts.
-        std::cerr << buf.str();
     }
+
+    // append status line, flush stdout, queue status line erasure
+    std::cout << console_status << std::flush << "\x1b[2K\r";
 }

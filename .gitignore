@@ -1,3 +1,5 @@
 *~
 .vscode
+.wraplock
+__pycache__
 build

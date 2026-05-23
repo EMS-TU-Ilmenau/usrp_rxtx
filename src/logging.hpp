@@ -14,6 +14,7 @@
 #include <source_location>
 #include <string>
 #include <thread>
+#include <uhd/types/time_spec.hpp>
 #include <uhd/types/tune_request.hpp>
 #include <uhd/types/tune_result.hpp>
 #include <variant>
@@ -57,6 +58,23 @@ namespace Log {
     class Null {
     public:
         void serialize(std::ostream& console, std::ostream& logfile) const;
+    };
+
+    /// console status information
+    class Status {
+    public:
+        Status(uhd::time_spec_t time, double rx, double tx, double wr, uint64_t wr_queue, uint64_t wr_free)
+            : time{time}, rx{rx}, tx{tx}, wr{wr}, wr_queue{wr_queue}, wr_free{wr_free}
+        {};
+        void serialize(std::ostream& console, std::ostream& logfile) const;
+
+    protected:
+        uhd::time_spec_t time;
+        double rx;
+        double tx;
+        double wr;
+        uint64_t wr_queue;
+        uint64_t wr_free;
     };
 
     class Base {
@@ -282,6 +300,12 @@ public:
         cond_var.notify_one();
     };
 
+    void set_status(uhd::time_spec_t time, double rx, double tx, double wr, uint64_t wr_queue, uint64_t wr_free)
+    {
+        queue.push(Log::Status{time, rx, tx, wr, wr_queue, wr_free});
+        cond_var.notify_one();
+    }
+
     void log_exception(std::exception_ptr&& exc)
     {
         queue.push(Log::Exception{std::move(exc)});
@@ -364,6 +388,7 @@ private:
     std::thread worker_handle;
 
     mpsc<std::variant<Log::Null,
+                      Log::Status,
                       Log::Misc,
                       Log::Exception,
                       Log::Exit,
