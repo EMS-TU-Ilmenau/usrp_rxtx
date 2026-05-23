@@ -202,7 +202,7 @@ namespace Log {
             : Base{tune_res.clipped_rf_freq == tune_res.target_rf_freq &&
                    tune_res.actual_rf_freq  == tune_res.target_rf_freq &&
                    tune_res.actual_dsp_freq == tune_res.target_dsp_freq
-                   ? INFO : ERROR}
+                   ? INFO : WARN}
             , tune_res{tune_res}
             , path{path}
             , chan{chan}

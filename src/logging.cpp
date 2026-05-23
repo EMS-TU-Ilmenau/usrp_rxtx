@@ -256,7 +256,7 @@ void Log::Exit::serialize(std::ostream& console, std::ostream& logfile) const
 void Log::RxZeropad::serialize(std::ostream& console, std::ostream& logfile) const
 {
     console << time_short() << ' ' << level.to_string_color_fixed()
-            << ": Zero padding " << samples
+            << ": Rx zero padded " << samples
             << " samples at ring buffer offset " << offset << " samples."
             << '\n';
 
