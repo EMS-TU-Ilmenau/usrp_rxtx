@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2023-2024 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
+// Copyright (c) 2023-2026 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
 
 #ifndef CONFIG_HPP
 #define CONFIG_HPP
@@ -74,7 +74,7 @@ private:
     std::map<std::string, std::map<std::string, value_t>> map = {
         { "usrp", {
             { "args", "" },
-            { "sync", "" }
+            { "sync", "host" }
         }},
         { "cpu", {
             { "max_latency_usec", 100 }
@@ -88,8 +88,8 @@ private:
             { "pub_samples", 0 }
         }},
         { "shmem", {
-            { "mount_desc", "/dev/hugepages" },
-            { "mount_ring", "/dev/hugepages" },
+            { "mount_desc", "/dev/shm" },
+            { "mount_ring", "/dev/shm" },
             { "size_desc_mib", 2 },
             { "size_ring_mib", 1024 }
         }},
