@@ -83,17 +83,24 @@ try {
 
 #ifdef __linux__
         // register power management quality-of-service (PM QoS) request with
-        // kernel. inhibits certain power mangement features that increase
+        // kernel. inhibits certain power management features that increase
         // latency above specified threshold (e.g., C-states).
         // https://www.kernel.org/doc/html/latest/power/pm_qos_interface.html
-        std::ofstream dev_latency {"/dev/cpu_dma_latency", std::ios_base::binary};
-        if (!dev_latency)
-            throw syscall_error{"error opening /dev/cpu_dma_latency"};
-        dev_latency.write((char *) &(cfg.cpu.max_latency_usec), 4);
-        dev_latency.flush();
-        if (!dev_latency)
-            throw syscall_error{"error writing to /dev/cpu_dma_latency"};
+        std::ofstream dev_latency;
+        if (cfg.tune.dev_cpu_dma_latency_usec >= 0) {
+            dev_latency = std::ofstream{"/dev/cpu_dma_latency", std::ios_base::binary};
+            if (!dev_latency)
+                throw syscall_error{"error opening /dev/cpu_dma_latency"};
+            dev_latency.write((char *) &(cfg.tune.dev_cpu_dma_latency_usec), 4);
+            dev_latency.flush();
+            if (!dev_latency)
+                throw syscall_error{"error writing to /dev/cpu_dma_latency"};
+        }
         // keep file open until process terminates
+#else
+    if (cfg.tune.dev_cpu_dma_latency_usec >= 0)
+        logger->log("Configuration tune.dev_cpu_dma_latency_usec not supported by operating system.",
+            Log::ERROR);
 #endif
 
 #if _POSIX_C_SOURCE >= 200112L

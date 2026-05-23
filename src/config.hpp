@@ -21,9 +21,6 @@ public:
         std::string sync;
     } usrp;
     struct {
-        int32_t max_latency_usec;
-    } cpu;
-    struct {
         std::string host;
         int port;
         std::string user;
@@ -61,6 +58,9 @@ public:
     struct {
         std::string directory;
     } wr;
+    struct {
+        int32_t dev_cpu_dma_latency_usec;
+    } tune;
 
     /// convert config to Json::Object for logging config values
     auto to_json() const -> Json::Object;
@@ -75,9 +75,6 @@ private:
         { "usrp", {
             { "args", "" },
             { "sync", "host" }
-        }},
-        { "cpu", {
-            { "max_latency_usec", 100 }
         }},
         { "mqtt", {
             { "host", "0.0.0.0" },
@@ -116,6 +113,9 @@ private:
         }},
         { "wr", {
             { "directory", "" },
+        }},
+        { "tune", {
+            { "dev_cpu_dma_latency_usec", -1 }
         }}
     };
 

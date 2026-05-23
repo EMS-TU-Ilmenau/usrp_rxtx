@@ -125,7 +125,6 @@ void Config::parse(std::istream& istream)
     // copy variant values to static type structs
     usrp.args = std::get<std::string>(map["usrp"]["args"]);
     usrp.sync = std::get<std::string>(map["usrp"]["sync"]);
-    cpu.max_latency_usec = (int32_t) std::get<int64_t>(map["cpu"]["max_latency_usec"]);
     mqtt.host = std::get<std::string>(map["mqtt"]["host"]);
     mqtt.port = (int) std::get<int64_t>(map["mqtt"]["port"]);
     mqtt.user = std::get<std::string>(map["mqtt"]["user"]);
@@ -154,6 +153,7 @@ void Config::parse(std::istream& istream)
     tx.lo_source = std::get<std::string>(map["tx"]["lo_source"]);
     tx.rate = std::get<double>(map["tx"]["rate"]);
     wr.directory = std::get<std::string>(map["wr"]["directory"]);
+    tune.dev_cpu_dma_latency_usec = (int32_t) std::get<int64_t>(map["tune"]["dev_cpu_dma_latency_usec"]);
 }
 
 auto Config::to_json() const -> Json::Object
