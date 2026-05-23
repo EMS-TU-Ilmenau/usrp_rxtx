@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2024-2026 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
 
+#include <chrono>
 #include <thread>
 
 #include "error.hpp"
@@ -15,6 +16,19 @@ Sync::Sync(uhd::usrp::multi_usrp::sptr usrp, Logger::sptr logger, const Config& 
 
 Sync::~Sync()
 {};
+
+/// convert uhd::time_spec_t to std::chrono::time_point
+static inline auto
+uhd_timespec_to_std_time_point(const uhd::time_spec_t& time)
+    -> const std::chrono::time_point<std::chrono::system_clock>
+{
+    using namespace std::chrono;
+    using unix_ns = std::chrono::time_point<system_clock, nanoseconds>;
+
+    uint64_t nsec = (uint64_t) (time.get_full_secs() * 1e9) +
+                    (uint64_t) (time.get_frac_secs() * 1e9);
+    return unix_ns{nanoseconds{nsec}};
+}
 
 void Sync::sync_10mhz()
 {
@@ -46,21 +60,27 @@ void Sync::sync_1pps()
     // wait for clock to be set
     uhd::time_spec_t pps = wait_pps();
 
-    logger->log("Set USRP time to: " + std::to_string(pps.get_real_secs()));
+    // log synchronization result
+    logger->log(std::format("Synchronized USRP to host time and external PPS: {:%Y-%m-%dT%H:%M:%S}Z",
+        uhd_timespec_to_std_time_point(pps)));
 }
 
 void Sync::sync_host()
 {
-    // set usrp time to system clock rounded to closest full second
+    // set usrp time to system clock
     std::chrono::time_point<std::chrono::system_clock> now {std::chrono::system_clock::now()};
     auto duration = now.time_since_epoch();
 
     auto seconds = std::chrono::duration_cast<std::chrono::seconds>(duration);
     duration -= seconds;
     auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(duration);
+    // TODO: pre-adjust for half of round trip time
     usrp->set_time_now(uhd::time_spec_t{
         seconds.count(), nanoseconds.count() * 1e-9
     });
+
+    // log synchronization result
+    logger->log(std::format("Synchronized USRP to host time: {:%Y-%m-%dT%H:%M:%S}Z", now));
 }
 
 void Sync::sync_gpsdo()
@@ -91,7 +111,9 @@ void Sync::sync_gpsdo()
     // wait for clock to be set
     uhd::time_spec_t pps = wait_pps();
 
-    logger->log("Set USRP time to: " + std::to_string(pps.get_real_secs()));
+    // log synchronization result
+    logger->log(std::format("Synchronized USRP to host time and internal GPSDO PPS: {:%Y-%m-%dT%H:%M:%S}Z",
+        uhd_timespec_to_std_time_point(pps)));
 }
 
 auto Sync::wait_pps() -> uhd::time_spec_t
