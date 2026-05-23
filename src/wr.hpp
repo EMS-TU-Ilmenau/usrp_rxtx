@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2024 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
+// Copyright (c) 2024-2026 TU Ilmenau, FG EMS, Carsten Andrich <carsten.andrich@tu-ilmenau.de>
 
 #ifndef WR_HPP
 #define WR_HPP
 
 #include <atomic>
+#include <cstdio>
 #include <filesystem>
 #include <memory>
 #include <thread>
@@ -43,7 +44,8 @@ private:
     std::vector<Ringbuf<sample_t>::sptr> ringbufs;
     Logger::sptr logger;
 
-    std::vector<int> fds;
+    std::vector<std::filesystem::path> paths;
+    std::vector<std::FILE *> files;
     std::vector<uint64_t> tails;
 
     void worker();

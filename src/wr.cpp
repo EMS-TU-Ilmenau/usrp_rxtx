@@ -5,10 +5,9 @@ extern "C" {
 #ifdef _GNU_SOURCE
     #include <pthread.h>
 #endif
+#if _POSIX_C_SOURCE >= 200112L
     #include <fcntl.h>
-    #include <sys/resource.h>
-    #include <sys/stat.h>
-    #include <sys/types.h>
+#endif
 }
 
 #include "error.hpp"
@@ -42,20 +41,36 @@ Wr::Wr(std::vector<Ringbuf<sample_t>::sptr>&& _ringbufs,
             std::stringstream filename;
             filename << "_" << start_nsec << "_ch" << ch << ".cint16.bin";
             std::filesystem::path path = path_prefix.generic_string() + filename.str();
+            paths.push_back(path);
 
             // open file
-            int fd;
-            if ((fd = open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_DIRECT, 0644)) == -1)
-                throw syscall_error{"open(\"" + path.generic_string() + "\", ...) failed"};
-            fds.push_back(fd);
+            std::FILE *fh = std::fopen(path.c_str(), "wbx");
+            if (fh == nullptr)
+                throw syscall_error{"std::fopen(\"" + path.generic_string() + "\", ...) failed"};
+            files.push_back(fh);
+
+            // disable buffering
+            std::setvbuf(fh, nullptr, _IONBF, 0);
+
+            // set O_DIRECT on platforms that support it
+#if _POSIX_C_SOURCE >= 200112L && O_DIRECT
+            int fd = fileno(fh);
+            if (fd < 0)
+                throw syscall_error{"fileno() failed"};
+            int flags = fcntl(fd, F_GETFL);
+            if (flags < 0)
+                throw syscall_error{"fcntl(fd, F_GETFL) failed"};
+            if (fcntl(fd, F_SETFL, flags | O_DIRECT) != 0)
+                throw syscall_error{"fcntl(fd, F_SETFL) failed"};
+#endif
 
             // log file path, start time, and Ringbuf offset
             logger->log_wr_open(path, start_nsec, tails[ch]);
         }
     } catch (...) {
-        // close all opened fds and rethrow exception
-        for (size_t ch = 0; ch < fds.size(); ch++)
-            close(fds[ch]);
+        // close all open file handles and rethrow exception
+        for (auto fh : files)
+            fclose(fh);
         throw;
     }
 
@@ -69,9 +84,9 @@ Wr::~Wr()
     run.store(false, std::memory_order_relaxed);
     worker_handle.join();
 
-    // close all open file descriptors
-    for (size_t ch = 0; ch < fds.size(); ch++)
-        close(fds[ch]);
+    // close all open file handles
+    for (auto fh : files)
+        fclose(fh);
 }
 
 void Wr::worker()
@@ -80,7 +95,7 @@ try {
     pthread_setname_np(pthread_self(), "wr");
 #endif
 
-    assert(fds.size() == ringbufs.size());
+    assert(files.size() == ringbufs.size());
 
     uint64_t _samples_written = 0;
     while (run.load(std::memory_order_relaxed)) {
@@ -102,17 +117,16 @@ try {
             }
 
             // write span to respective fd
-            // write(fd, buf, size) on a file should return 0 only if size == 0
-            ssize_t ret = write(fds[ch], (char *) span.data(), span.size_bytes());
-            if (ret < 0)
-                throw syscall_error{"write() failed"};
+            // fwrite() should return 0 only if size == 0 or count == 0
+            assert(span.size_bytes() > 0);
+            size_t ret = std::fwrite((char *) span.data(), 1, span.size_bytes(), files[ch]);
             if (ret == 0)
-                throw generic_error{"write() returned 0"};
+                throw syscall_error{"std::fwrite() failed"};
 
             // check if span was clobbered during write()
             if (ringbufs[ch]->get_clobber_distance(tails[ch]) < 0) {
-                if (ftruncate(fds[ch], sizeof(Wr::sample_t) * _samples_written) != 0)
-                    throw syscall_error{"Filesystem writing too slow and last block of file clobbered; ftruncate() failed"};
+                // truncate clobbered block
+                std::filesystem::resize_file(paths[ch], sizeof(Wr::sample_t) * _samples_written);
                 throw generic_error{"Filesystem writing too slow"};
             }
 
