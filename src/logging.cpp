@@ -44,6 +44,19 @@ static inline auto timespec_to_hms_ms(const uhd::time_spec_t& time) -> const std
     return std::format("{:%H:%M:%S}Z", truncated);
 }
 
+/// convert uhd::time_spec_t to std::chrono::time_point
+static inline auto
+uhd_timespec_to_std_time_point(const uhd::time_spec_t& time)
+    -> const std::chrono::time_point<std::chrono::system_clock>
+{
+    using namespace std::chrono;
+    using unix_ns = std::chrono::time_point<system_clock, nanoseconds>;
+
+    uint64_t nsec = (uint64_t) (time.get_full_secs() * 1e9) +
+                    (uint64_t) (time.get_frac_secs() * 1e9);
+    return unix_ns{nanoseconds{nsec}};
+}
+
 /// return error level formatted as std::string
 auto Log::Level::to_string() const -> const std::string
 {
@@ -342,8 +355,10 @@ void Log::UhdAsyncMetadata::serialize(std::ostream& console, std::ostream& logfi
         { "event_code", event_code },
         { "channel", async_meta.channel },
         { "has_time_spec", async_meta.has_time_spec },
-        { "time_spec", (uint64_t) (async_meta.time_spec.get_full_secs() * 1e9) +
-                       (uint64_t) (async_meta.time_spec.get_frac_secs() * 1e9) },
+        { "time_spec", std::format("{:%Y-%m-%dT%H:%M:%S}Z",
+            uhd_timespec_to_std_time_point(async_meta.time_spec)) },
+        { "time_spec_ns", (uint64_t) (async_meta.time_spec.get_full_secs() * 1e9) +
+                          (uint64_t) (async_meta.time_spec.get_frac_secs() * 1e9) },
         { "user_payload",
             async_meta.event_code == uhd::async_metadata_t::EVENT_CODE_USER_PAYLOAD
                 ? Json::Array{{
@@ -419,8 +434,10 @@ void Log::UhdRxMetadata::serialize(std::ostream& console, std::ostream& logfile)
         { "start_of_burst", rx_meta.start_of_burst },
         { "end_of_burst", rx_meta.end_of_burst },
         { "has_time_spec", rx_meta.has_time_spec },
-        { "time_spec", (uint64_t) (rx_meta.time_spec.get_full_secs() * 1e9) +
-                       (uint64_t) (rx_meta.time_spec.get_frac_secs() * 1e9) }
+        { "time_spec", std::format("{:%Y-%m-%dT%H:%M:%S}Z",
+            uhd_timespec_to_std_time_point(rx_meta.time_spec)) },
+        { "time_spec_ns", (uint64_t) (rx_meta.time_spec.get_full_secs() * 1e9) +
+                          (uint64_t) (rx_meta.time_spec.get_frac_secs() * 1e9) }
     }} << '\n';
 }
 
@@ -467,8 +484,10 @@ void Log::UhdStreamCmd::serialize(std::ostream& console, std::ostream& logfile) 
         { "stream_mode", stream_mode },
         { "num_samps", stream_cmd.num_samps },
         { "stream_now", stream_cmd.stream_now },
-        { "time_spec", (uint64_t) (stream_cmd.time_spec.get_full_secs() * 1e9) +
-                       (uint64_t) (stream_cmd.time_spec.get_frac_secs() * 1e9) }
+        { "time_spec", std::format("{:%Y-%m-%dT%H:%M:%S}Z",
+            uhd_timespec_to_std_time_point(stream_cmd.time_spec)) },
+        { "time_spec_ns", (uint64_t) (stream_cmd.time_spec.get_full_secs() * 1e9) +
+                          (uint64_t) (stream_cmd.time_spec.get_frac_secs() * 1e9) }
     }} << '\n';
 }
 
@@ -520,8 +539,10 @@ void Log::UhdTxMetadata::serialize(std::ostream& console, std::ostream& logfile)
         { "start_of_burst", tx_meta.start_of_burst },
         { "end_of_burst", tx_meta.end_of_burst },
         { "has_time_spec", tx_meta.has_time_spec },
-        { "time_spec", (uint64_t) (tx_meta.time_spec.get_full_secs() * 1e9) +
-                       (uint64_t) (tx_meta.time_spec.get_frac_secs() * 1e9) }
+        { "time_spec", std::format("{:%Y-%m-%dT%H:%M:%S}Z",
+            uhd_timespec_to_std_time_point(tx_meta.time_spec)) },
+        { "time_spec_ns", (uint64_t) (tx_meta.time_spec.get_full_secs() * 1e9) +
+                          (uint64_t) (tx_meta.time_spec.get_frac_secs() * 1e9) }
     }} << '\n';
 }
 
