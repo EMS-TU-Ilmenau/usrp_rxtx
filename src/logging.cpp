@@ -169,7 +169,7 @@ void Log::Status::serialize(std::ostream& console, std::ostream& logfile) const
     if (tx == -1.) {
         buf << " tx=\x1b[90mDISABLED\x1b[0m";
     } else if (tx == 0.) {
-        buf << " tx=\x1b[93mMUTED\x1b[0m";
+        buf << " tx=\x1b[93mMUTE\x1b[0m ";
     } else {
         buf << std::format(" tx={:05.01f}", tx);
     }
@@ -177,9 +177,9 @@ void Log::Status::serialize(std::ostream& console, std::ostream& logfile) const
     if (rx == -1.) {
         buf << " wr=\x1b[90mDISABLED\x1b[0m";
     } else if (wr == -1.) {
-        buf << " wr=\x1b[93mSTANDBY\x1b[0m";
+        buf << " wr=\x1b[93mSTBY\x1b[0m ";
     } else if (wr == -2.) {
-        buf << " wr=\x1b[91mFAILED\x1b[0m";
+        buf << " wr=\x1b[91mFAIL\x1b[0m ";
     } else {
         buf << std::format(" wr={:05.01f}", wr);
     }
@@ -192,20 +192,20 @@ void Log::Status::serialize(std::ostream& console, std::ostream& logfile) const
 
     uint64_t wr_queue_mib = wr_queue >> 20;
     if (wr_queue_mib < 64) {
-        buf << std::format(" wr_queue={:03}M", wr_queue_mib);
+        buf << std::format(" wr_queue={:04}M", wr_queue_mib);
     } else if (wr_queue_mib < 256) {
-        buf << std::format(" wr_queue=\x1b[93m{:03}M\x1b[0m", wr_queue_mib);
+        buf << std::format(" wr_queue=\x1b[93m{:04}M\x1b[0m", wr_queue_mib);
     } else {
-        buf << std::format(" wr_queue=\x1b[91m{:03}M\x1b[0m", wr_queue_mib);
+        buf << std::format(" wr_queue=\x1b[91m{:04}M\x1b[0m", wr_queue_mib);
     }
 
     uint64_t wr_free_gib = wr_free >> 30;
     if (wr_free_gib > 256) {
-        buf << std::format(" wr_free={:03}G", wr_free_gib);
+        buf << std::format(" wr_free={:04}G", wr_free_gib);
     } else if (wr_free_gib > 64) {
-        buf << std::format(" wr_free=\x1b[93m{:03}G\x1b[0m", wr_free_gib);
+        buf << std::format(" wr_free=\x1b[93m{:04}G\x1b[0m", wr_free_gib);
     } else {
-        buf << std::format(" wr_free=\x1b[91m{:03}G\x1b[0m", wr_free_gib);
+        buf << std::format(" wr_free=\x1b[91m{:04}G\x1b[0m", wr_free_gib);
     }
 
     console_status = buf.str();
