@@ -1,0 +1,12 @@
+[Unit]
+Description=FS740 GNSSDO (mobile use)
+
+[Service]
+WorkingDirectory=/opt/fs740
+ExecStart=/opt/fs740/fs740.py %i
+Type=simple
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

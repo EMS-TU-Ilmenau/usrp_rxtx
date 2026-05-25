@@ -1,0 +1,12 @@
+[Unit]
+Description=LC_XO GPSDO
+
+[Service]
+WorkingDirectory=/opt/lc_xo
+ExecStart=/opt/lc_xo/lc_xo.py /dev/%i
+Type=simple
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

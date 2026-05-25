@@ -1,0 +1,2 @@
+SUBSYSTEM=="tty", ACTION=="add",    ENV{ID_BUS}=="usb", ENV{ID_VENDOR_ID}=="1546", ENV{ID_MODEL_ID}=="01a9", RUN="/usr/bin/systemctl start --no-block rtk@$kernel"
+SUBSYSTEM=="tty", ACTION=="remove", ENV{ID_BUS}=="usb", ENV{ID_VENDOR_ID}=="1546", ENV{ID_MODEL_ID}=="01a9", RUN="/usr/bin/systemctl stop  --no-block rtk@$kernel"

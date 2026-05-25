@@ -1,0 +1,15 @@
+[Unit]
+Description=Ntrip to MQTT service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/opt/ntrip2mqtt
+ExecStart=/opt/ntrip2mqtt/ntrip2mqtt.py
+User=ntrip2udp
+Type=simple
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

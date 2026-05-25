@@ -1,0 +1,12 @@
+[Unit]
+Description=RTK
+
+[Service]
+WorkingDirectory=/opt/rtk
+ExecStart=/opt/rtk/f9p_rover.py /dev/%i
+Type=simple
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target
