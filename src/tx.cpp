@@ -95,6 +95,10 @@ try {
     const size_t num_channels = tx->get_num_channels();
     const uint64_t samps_per_frame = tx->get_max_num_samps();
 
+    // bug flags used to trigger special treatment of misbehaving devices (see
+    // occurrences of variable names below for details)
+    const bool bug_error_burst_ack = usrp->get_mboard_name()[0] == 'B';
+
     // tx_signal contains a single period of the transmit signal. create a
     // periodified copy for use with uhd::tx_streamer::send().
     std::vector<sample_t> sendbuf(FRAMES_PER_SEND * samps_per_frame + tx_signal.size());
@@ -185,9 +189,27 @@ try {
             // log EOB
             logger->log_uhd_tx_metadata(tx_md);
 
+            // After sending the EOB, the USRP's fifo will likely still contain
+            // samples that it must process before the burst is complete.
+            // Starting a new burst while the previous burst is still in
+            // progress causes undefined USRP behavior (tests revealed that the
+            // time_spec of the subsequent burst will be ignored).
+            // When the burst has been completed, the USRP sends an async
+            // metadata packet with EVENT_CODE_BURST_ACK.
+
             // receive async BURST_ACKs for all channels
-            // FIXME: delays start of next of burst after underflow
             size_t num_acks = 0;
+
+            // Note that while the USRP X310 behaves as described above, the
+            // USRP B205 does **NOT** send an EVENT_CODE_BURST_ACK for an
+            // end_of_burst following an error, e.g., EVENT_CODE_UNDERFLOW.
+            // All end_of_burst packets not preceded by an error code are
+            // acknowledged as expected.
+            // Therefore, avoid unnecessary timeouts by only waiting for
+            // EVENT_CODE_BURST_ACK if this is either not a a buggy device or
+            // not an error.
+            if (!samples_burst && bug_error_burst_ack)
+                num_acks = num_channels;
             while (num_acks < num_channels) {
                 // FIXME: hard-coded timeout
                 if (tx->recv_async_msg(async_md, 0.1)) {
