@@ -11,6 +11,7 @@
 extern "C" {
 #if _POSIX_C_SOURCE >= 200112L
     #include <sched.h>
+    #include <unistd.h>
 #endif
 }
 
@@ -72,6 +73,23 @@ try {
         }
     );
     uhd::log::set_console_level(uhd::log::off);
+
+#if _POSIX_C_SOURCE >= 200112L
+    // create PID file
+    std::filesystem::path pidfile{
+        std::format("usrp_rxtx_{:s}_{:s}.pid", hostname, cfg.usrp.args)
+    };
+    // TODO: use std::ios_base::noreplace when switching to C++23
+    if (std::filesystem::exists(pidfile))
+        throw generic_error{std::format("PID file {:s} already exists",
+            pidfile.generic_string())};
+    std::ofstream pid{pidfile, std::ios_base::out | std::ios_base::trunc};
+    if (!pid)
+        throw syscall_error{std::format("error opening PID file {:s}",
+            pidfile.generic_string())};
+    pid << getpid() << std::endl;
+    pid.close();
+#endif
 
     // logger can handle all exceptions from now on
     int exit_code = 0;
@@ -412,6 +430,9 @@ try {
         logger->log("Unknown exception occurred in main thread. Terminating.", Log::FATAL);
     }
 
+#if _POSIX_C_SOURCE >= 200112L
+    std::filesystem::remove(pidfile);
+#endif
     logger->log_exit(exit_code);
     return exit_code;
 } catch (const std::exception& e) {
