@@ -169,25 +169,23 @@ void Log::Status::serialize(std::ostream& console, std::ostream& logfile) const
     if (tx == -1.) {
         buf << " tx=\x1b[90mDISABLED\x1b[0m";
     } else if (tx == 0.) {
-        buf << " tx=\x1b[93mMUTE\x1b[0m ";
+        buf << " tx=\x1b[93mMUTED\x1b[0m";
     } else {
         buf << std::format(" tx={:05.01f}", tx);
     }
 
-    if (rx == -1.) {
-        buf << " wr=\x1b[90mDISABLED\x1b[0m";
-    } else if (wr == -1.) {
-        buf << " wr=\x1b[93mSTBY\x1b[0m ";
-    } else if (wr == -2.) {
-        buf << " wr=\x1b[91mFAIL\x1b[0m ";
-    } else {
-        buf << std::format(" wr={:05.01f}", wr);
-    }
-
-    // only format wr_queue and wr_free if rx is configured
+    // only format wr* if rx is configured
     if (rx < 0.) {
         console_status = buf.str();
         return;
+    }
+
+    if (wr == -1.) {
+        buf << " wr=\x1b[93mREADY\x1b[0m";
+    } else if (wr == -2.) {
+        buf << " wr=\x1b[91mERROR\x1b[0m";
+    } else {
+        buf << std::format(" wr={:05.01f}", wr);
     }
 
     uint64_t wr_queue_mib = wr_queue >> 20;
