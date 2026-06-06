@@ -165,8 +165,15 @@ auto Config::to_json() const -> Json::Object
         Json::Object section;
 
         // iterate over key-value pairs of current section
-        for (const auto& iter_kv : iter_sec.second)
-            section.emplace_back(iter_kv.first, variant_cast(iter_kv.second));
+        for (const auto& iter_kv : iter_sec.second) {
+            if (iter_sec.first == "mqtt" && iter_kv.first == "user" && !mqtt.user.empty()) {
+                section.emplace_back(iter_kv.first, "***REDACTED***");
+            } else if (iter_sec.first == "mqtt" && iter_kv.first == "password" && !mqtt.password.empty()) {
+                section.emplace_back(iter_kv.first, "***REDACTED***");
+            } else {
+                section.emplace_back(iter_kv.first, variant_cast(iter_kv.second));
+            }
+        }
 
         cfg.emplace_back(iter_sec.first, section);
     }
